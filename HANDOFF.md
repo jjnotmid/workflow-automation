@@ -1,6 +1,6 @@
 # Session Handoff
 
-_Written 2026-09-01 09:12:29 WAT. A previous session generated this before handing off_
+_Written 2026-09-01 11:49:49 WAT. A previous session generated this before handing off_
 _to a fallback provider. Treat it as the brief for what was in flight._
 
 ## Active provider chain
@@ -18,33 +18,18 @@ reasoning. Tier 3 spends real money from a finite $225 balance.**
 
 ### Workflow Automation
 ```
-## No commits yet on main
-?? .agents/
-?? .claude-flow/
-?? .claude/
-?? .gitignore
-?? .router-state/
-?? .swarm/
-?? 1-Consulting-Agreement-Renteazy.docx
-?? 2-Statement-of-Work-Renteazy.docx
-?? "4-Capability-Statement-Usifoh-Joshua copy.pdf"
-?? 4-Capability-Statement-Usifoh-Joshua.pdf
-?? 5-Discovery-Deck-Renteazy.pptx
-?? ARCHITECTURE.md
-?? BACKEND_AUDIT.md
-?? "Blu Tech Contract - BeatTrybe (1).pdf"
-?? "Blu Tech Learn Addendum A Content Sourcing.pdf"
-?? "Blu Tech Learn Addendum B Zero Capital Launch.pdf"
-?? "Blu Tech Learn PRD.pdf"
-?? CAPABILITIES.md
-?? CLAUDE.md
-?? "CONTRACT OF EMPLOYMENT - Joshua Usifoh.pdf"
-?? HANDOFF.md
-?? HANDOVER-full-session.md
-?? Joshua-Plan.pdf
-?? LOCAL-SETUP.md
+## main...origin/main
+ M HANDOFF.md
+ M MEMORY.md
+ M setup.sh
+ M whatsapp/bot.js
 
 recent commits:
+5ff5353 Rewrite README as a feature showcase, remove employer references
+b262e63 Rewrite README in first person, add rule for future doc voice
+2d32efa Add README for the multi-machine backup/mirror repo
+0285cd1 Close operating-rhythm gaps: scheduled jobs, project state files
+8122d72 Initial commit: workflow automation CLI tools, router, WhatsApp bot, and web dashboard
 ```
 
 ### sifta

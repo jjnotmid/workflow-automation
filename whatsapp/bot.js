@@ -210,7 +210,11 @@ const FALLBACK = { sub: 'free', free: 'ar', ar: null }
 // getting cut off mid-flight. Override with WA_BOT_TIMEOUT_MS if needed.
 const TIMEOUT_MS = Number(process.env.WA_BOT_TIMEOUT_MS) || 30 * 60 * 1000
 
+// Human-readable tier names for the "switched tier" note appended to replies.
+const TIER_LABEL = { sub: 'subscription', free: 'free', ar: 'AgentRouter (paid)' }
+
 async function askClaude(prompt, tier = TIER) {
+  const startTier = tier
   let cur = tier
   let args = await sessionArgs()
   let retriedSession = false
@@ -231,6 +235,12 @@ async function askClaude(prompt, tier = TIER) {
       if (LIMIT_RE.test(stderr || '') || (!out && LIMIT_RE.test(stdout))) {
         const next = FALLBACK[cur]
         if (next) { log(`tier ${cur} out of quota -> ${next}`); cur = next; continue }
+      }
+      // Tell Joshua when a fallback actually happened — this used to be
+      // silent (only in the log file), so a reply from a different tier
+      // looked identical to a normal one.
+      if (cur !== startTier) {
+        return `${out}\n\n[switched to ${TIER_LABEL[cur]} tier]`
       }
       return out
     } catch (err) {

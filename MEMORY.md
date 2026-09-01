@@ -6,18 +6,35 @@ says something worth keeping; keep entries short and factual.
 
 ## Who
 
-Usifoh Eseosa Joshua — Lagos, Nigeria. Tech business development executive,
-founder, full-stack developer. ~7 years B2B sales across tech, EdTech, SaaS,
-real estate and travel. University of Lagos student. GitHub: `jjnotmid`.
-WhatsApp: 2348124966881.
+Usifoh Eseosa Joshua — 19, Lagos, Nigeria (from Edo State). Tech business
+development executive, founder, full-stack developer. 6+ years in sales,
+selling since age 12, coding since age 8. First-year (100 level) B.Sc.
+Petroleum & Gas Engineering student at the University of Lagos, a five-year
+course. GitHub: `jjnotmid`. WhatsApp: 2348124966881.
 
-## Projects
+## Jobs
 
-- **Blu Tech Learn** — AI-powered EdTech platform. Co-founder.
-- **NepaWatch** — real-time crowd-sourced Nigerian power-outage tracker, 600+ users.
+- **N28 Consulting** — Product Manager, Syntricore Enterprise Platform.
+  Started 1 Sept 2026, 3 office days/week.
+- **Delphi Education Hub** — Marketing & Growth Lead, remote. Starts 13 Sept 2026.
+
+## Projects (his own)
+
+- **Blu Tech Learn** — AI-powered EdTech platform. Co-founder. Pre-launch.
+- **NepaWatch** — real-time crowd-sourced Nigerian power-outage tracker,
+  1,500 users across all 36 states + FCT.
 - **Content creation** — short-form video; wants editing and posting automated.
 
 Stack: Next.js, React, Supabase, plus IT admin / RBAC / DevOps.
+
+## Voice — how to write and talk to him
+
+- No em dashes, ever.
+- Plain, short sentences. No corporate register, no performed closings.
+- Give a pick, not a menu of options — number a recommendation.
+- ₦ figures get comma separators. Density over length, he scans.
+- Never over-praise — he calls it out when it happens, and he's right to.
+- Never invent a number, source, or biographical detail. Flag guesses as guesses.
 
 ## Working preferences
 
