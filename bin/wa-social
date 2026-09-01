@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# wa-social — read the internet (Agent-Reach wrapper).
+#
+# READ-ONLY. Agent-Reach sees platforms; it cannot post to them. Posting needs
+# per-platform API credentials that aren't configured.
+#
+#   wa-social doctor              which platforms are live
+#   wa-social setup               interactive wizard to add logins
+#   wa-social <args...>           pass through to agent-reach
+#
+# The wrapper exists because Agent-Reach needs two env fixes to work here:
+# its own venv on PATH, and an explicit CA bundle (python.org's 3.13 ships
+# without one, so every HTTPS call fails cert verification otherwise).
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+VENV="$WA/.venv"
+
+[ -x "$VENV/bin/agent-reach" ] || {
+  echo "Agent-Reach not installed. Run: bash \"$WA/setup.sh\"" >&2
+  exit 1
+}
+
+CERTS="$($VENV/bin/python -c 'import certifi;print(certifi.where())' 2>/dev/null)"
+
+export PATH="$VENV/bin:$PATH"
+[ -n "$CERTS" ] && { export SSL_CERT_FILE="$CERTS"; export REQUESTS_CA_BUNDLE="$CERTS"; }
+
+exec "$VENV/bin/agent-reach" "$@"

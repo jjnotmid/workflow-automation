@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# wa-email — send mail through the already-configured Mail.app accounts.
+#
+# Deliberately NOT an MCP connector. claude.ai connectors are disabled whenever
+# a custom auth token is set, which means they vanish in every router/fallback
+# session. A CLI script works identically on Anthropic, AgentRouter, and free
+# models — so email keeps working no matter which tier is driving.
+#
+# Accounts already configured locally: iCloud, Google, jjnotmid47@gmail.com
+#
+#   wa-email send --to a@b.com --subject "Hi" --body "text" [--from acct] [--send]
+#   wa-email accounts
+#
+# SAFETY: composes a draft and opens it for review by default. Add --send to
+# actually deliver. Sending mail is outward-facing and hard to walk back.
+
+set -euo pipefail
+
+usage() { sed -n '2,20p' "$0" | sed 's/^# //; s/^#$//'; exit 1; }
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  accounts)
+    osascript -e 'tell application "Mail" to get name of every account'
+    ;;
+
+  send)
+    TO=""; SUBJECT=""; BODY=""; FROM=""; DO_SEND=0; ATTACH=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --to)      TO="$2"; shift 2 ;;
+        --subject) SUBJECT="$2"; shift 2 ;;
+        --body)    BODY="$2"; shift 2 ;;
+        --from)    FROM="$2"; shift 2 ;;
+        --attach)  ATTACH="$2"; shift 2 ;;
+        --send)    DO_SEND=1; shift ;;
+        *) echo "unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    [ -n "$TO" ] && [ -n "$SUBJECT" ] || { echo "--to and --subject required" >&2; exit 1; }
+
+    # Escape for AppleScript string literals.
+    esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+    script="
+    tell application \"Mail\"
+      set newMsg to make new outgoing message with properties {subject:\"$(esc "$SUBJECT")\", content:\"$(esc "$BODY")\", visible:true}
+      tell newMsg
+        make new to recipient at end of to recipients with properties {address:\"$(esc "$TO")\"}"
+
+    if [ -n "$FROM" ]; then
+      script="$script
+        set sender to \"$(esc "$FROM")\""
+    fi
+
+    if [ -n "$ATTACH" ]; then
+      [ -f "$ATTACH" ] || { echo "attachment not found: $ATTACH" >&2; exit 1; }
+      script="$script
+        tell content to make new attachment with properties {file name:(POSIX file \"$(esc "$ATTACH")\")} at after last paragraph"
+    fi
+
+    if [ "$DO_SEND" -eq 1 ]; then
+      script="$script
+      end tell
+      send newMsg
+    end tell"
+    else
+      script="$script
+      end tell
+      activate
+    end tell"
+    fi
+
+    osascript -e "$script"
+
+    if [ "$DO_SEND" -eq 1 ]; then
+      echo "sent to $TO"
+    else
+      echo "draft opened in Mail for review (add --send to deliver directly)"
+    fi
+    ;;
+
+  *) usage ;;
+esac

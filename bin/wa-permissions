@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# wa-permissions — trigger every macOS permission prompt in one pass.
+#
+# macOS only shows a permission dialog when an app first attempts the action,
+# and it will not let a script grant permissions on your behalf — by design, and
+# not something any tool can work around. What this DOES do is provoke every
+# prompt back to back, and open the right settings pane for the ones that need a
+# manual toggle. Ten minutes once, instead of being interrupted for weeks.
+#
+#   wa-permissions          run the whole sequence
+#   wa-permissions check    report status without prompting
+#
+# Grant these to your TERMINAL app (Terminal.app / iTerm), since that is what
+# actually runs the tools.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+ok()   { printf '\033[32m  ✓\033[0m %s\n' "$*"; }
+no()   { printf '\033[31m  ✗\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m  !\033[0m %s\n' "$*"; }
+step() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
+pane() { open "x-apple.systempreferences:com.apple.preference.security?$1" 2>/dev/null; }
+
+check_screen() {
+  local p="${TMPDIR:-/tmp}/wa_perm_probe.png"
+  rm -f "$p"; screencapture -x "$p" 2>/dev/null
+  [ -s "$p" ] && { rm -f "$p"; return 0; } || return 1
+}
+check_access() {
+  command -v cliclick >/dev/null || return 1
+  cliclick p 2>&1 | grep -qi "not enabled" && return 1 || return 0
+}
+check_mic() {
+  command -v rec >/dev/null || return 1
+  rec -q -c 1 -r 16000 -b 16 "${TMPDIR:-/tmp}/wa_mic.wav" trim 0 1 2>/dev/null
+  local s=0
+  [ -f "${TMPDIR:-/tmp}/wa_mic.wav" ] && s=$(stat -f%z "${TMPDIR:-/tmp}/wa_mic.wav" 2>/dev/null || echo 0)
+  rm -f "${TMPDIR:-/tmp}/wa_mic.wav"
+  [ "$s" -gt 1000 ]
+}
+check_mail() { osascript -e 'tell application "Mail" to get name of every account' >/dev/null 2>&1; }
+check_events() { osascript -e 'tell application "System Events" to get name of first process' >/dev/null 2>&1; }
+check_finder() { osascript -e 'tell application "Finder" to get name of home' >/dev/null 2>&1; }
+
+report() {
+  step "Current status"
+  check_screen  && ok "Screen Recording"      || no "Screen Recording — screenshots blocked"
+  check_access  && ok "Accessibility"         || no "Accessibility — clicks/typing silently ignored"
+  check_mic     && ok "Microphone"            || no "Microphone — voice notes blocked"
+  check_mail    && ok "Automation → Mail"     || no "Automation → Mail — email blocked"
+  check_events  && ok "Automation → System Events" || no "Automation → System Events"
+  check_finder  && ok "Automation → Finder"   || no "Automation → Finder"
+}
+
+if [ "${1:-}" = "check" ]; then report; exit 0; fi
+
+cat <<'EOF'
+Bulk permission setup
+=====================
+Each step provokes a macOS prompt. Click Allow / OK on every one.
+If a prompt does not appear, the settings pane will open — toggle your
+terminal app on there, then come back and press Return.
+
+EOF
+read -r -p "Press Return to begin… " _
+
+step "1/6  Screen Recording (screenshots)"
+if check_screen; then ok "already granted"; else
+  screencapture -x "${TMPDIR:-/tmp}/wa_perm_probe.png" 2>/dev/null
+  rm -f "${TMPDIR:-/tmp}/wa_perm_probe.png"
+  pane "Privacy_ScreenCapture"
+  warn "Enable your terminal under Screen Recording, then press Return."
+  warn "macOS requires a RESTART of the terminal app for this one to take effect."
+  read -r -p "" _
+fi
+
+step "2/6  Accessibility (mouse & keyboard control)"
+if check_access; then ok "already granted"; else
+  command -v cliclick >/dev/null && cliclick p >/dev/null 2>&1
+  pane "Privacy_Accessibility"
+  warn "Enable your terminal under Accessibility, then press Return."
+  read -r -p "" _
+fi
+
+step "3/6  Microphone (voice notes, voice assistant)"
+if check_mic; then ok "already granted"; else
+  warn "Recording one second to trigger the prompt…"
+  rec -q -c 1 -r 16000 -b 16 "${TMPDIR:-/tmp}/wa_mic.wav" trim 0 1 2>/dev/null
+  rm -f "${TMPDIR:-/tmp}/wa_mic.wav"
+  pane "Privacy_Microphone"
+  read -r -p "Press Return when granted… " _
+fi
+
+step "4/6  Automation → Mail (sending email)"
+if check_mail; then ok "already granted"; else
+  osascript -e 'tell application "Mail" to get name of every account' >/dev/null 2>&1
+  pane "Privacy_Automation"
+  read -r -p "Press Return when granted… " _
+fi
+
+step "5/6  Automation → System Events + Finder (app control)"
+osascript -e 'tell application "System Events" to get name of first process' >/dev/null 2>&1
+osascript -e 'tell application "Finder" to get name of home' >/dev/null 2>&1
+check_events && ok "System Events granted" || warn "approve System Events when prompted"
+check_finder && ok "Finder granted"        || warn "approve Finder when prompted"
+
+step "6/6  Full Disk Access (optional)"
+cat <<'EOF'
+  Only needed if you want tools reaching Mail, Messages or Safari data
+  directly. Everything built so far works without it. Opening the pane —
+  add your terminal if you want it, or just close the window.
+EOF
+pane "Privacy_AllFiles"
+read -r -p "Press Return to finish… " _
+
+report
+
+cat <<'EOF'
+
+If Screen Recording still shows ✗, fully quit and reopen your terminal —
+macOS does not apply that one to a running process.
+
+Re-check any time with:  wa-permissions check
+EOF

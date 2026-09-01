@@ -1,0 +1,40 @@
+{
+  "name": "daily-standup",
+  "description": "Joshua's daily driver — recall context, scan work, plan the day, capture learnings",
+  "version": "1.0.0",
+  "agents": [
+    { "id": "recaller", "type": "researcher" },
+    { "id": "scanner", "type": "code-analyzer" },
+    { "id": "planner", "type": "planner" },
+    { "id": "archivist", "type": "coder" }
+  ],
+  "steps": [
+    {
+      "id": "recall",
+      "name": "Recall yesterday",
+      "agent": "recaller",
+      "description": "Search ruflo memory (namespace 'daily') for the last 3 days of entries. Summarize what was in flight, what got finished, and what was left blocked."
+    },
+    {
+      "id": "scan",
+      "name": "Scan active work",
+      "agent": "scanner",
+      "depends": ["recall"],
+      "description": "For each tracked project, report git branch, uncommitted changes, commits in the last 24h, and any failing checks. Flag stale branches (no commits in 7+ days) and anything left uncommitted overnight."
+    },
+    {
+      "id": "plan",
+      "name": "Plan today",
+      "agent": "planner",
+      "depends": ["recall", "scan"],
+      "description": "Produce a ranked plan of at most 5 items for today. Carry over blocked items from recall, add work implied by scan. Each item gets an explicit 'done when' line. Call out the single highest-leverage task."
+    },
+    {
+      "id": "capture",
+      "name": "Capture to memory",
+      "agent": "archivist",
+      "depends": ["plan"],
+      "description": "Write today's plan to ruflo memory under namespace 'daily' with key 'YYYY-MM-DD', and append it to journal/YYYY-MM-DD.md."
+    }
+  ]
+}

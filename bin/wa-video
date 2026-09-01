@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+# wa-video — video editing for content creation, built on ffmpeg.
+#
+# Covers the edits that actually come up in short-form content, as one-liners
+# I can chain without a GUI. Works in every session tier.
+#
+#   wa-video info <in>                     duration, resolution, codecs
+#   wa-video vertical <in> <out>           -> 1080x1920 (TikTok/Reels/Shorts)
+#   wa-video trim <in> <out> <start> <dur> cut a clip (e.g. 00:00:05 10)
+#   wa-video silence <in>                  list silent gaps (for jump cuts)
+#   wa-video cut-silence <in> <out>        auto jump-cut out the silence
+#   wa-video transcribe <in> <out>         speech -> .srt (whisper-cpp)
+#   wa-video autocaption <in> <out>        transcribe AND burn in, one step
+#   wa-video captions <in> <out> <srt>     burn in existing subtitles
+#   wa-video thumb <in> <out> [time]       grab a thumbnail frame
+#   wa-video concat <out> <in1> <in2>...   join clips
+#   wa-video speed <in> <out> <factor>     e.g. 1.5 = 50% faster
+#   wa-video audio <in> <out.mp3>          extract audio (for transcription)
+#   wa-video compress <in> <out>           shrink for upload
+#
+# Transcription: `wa-video audio` then feed the mp3 to whisper if installed.
+
+set -euo pipefail
+
+die() { echo "$*" >&2; exit 1; }
+
+# Homebrew's core `ffmpeg` is built WITHOUT libass/freetype, so the subtitles
+# and drawtext filters don't exist there. `ffmpeg-full` has them but is
+# keg-only (deliberately unlinked, since it would clash with core ffmpeg).
+# Prefer the full build when it's installed; fall back to whatever is on PATH.
+FFMPEG_FULL="$(ls -d /usr/local/Cellar/ffmpeg-full/*/bin/ffmpeg 2>/dev/null | sort -V | tail -1)"
+if [ -x "$FFMPEG_FULL" ]; then
+  FFMPEG="$FFMPEG_FULL"
+  FFPROBE="$(dirname "$FFMPEG_FULL")/ffprobe"
+  [ -x "$FFPROBE" ] || FFPROBE="$(command -v ffprobe)"
+else
+  FFMPEG="$(command -v ffmpeg)"
+  FFPROBE="$(command -v ffprobe)"
+fi
+[ -x "$FFMPEG" ] || die "ffmpeg not found"
+
+# Everything below calls these, not the bare binaries.
+ffmpeg()  { "$FFMPEG" "$@"; }
+ffprobe() { "$FFPROBE" "$@"; }
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  info)
+    ffprobe -v error -show_entries \
+      format=duration,size,bit_rate:stream=index,codec_name,codec_type,width,height,r_frame_rate \
+      -of default=noprint_wrappers=1 "$1"
+    ;;
+
+  vertical)
+    # Scale to fill 1080x1920, center-crop the overflow. Blurred bars would be
+    # softer but crops test better on short-form.
+    ffmpeg -y -i "$1" \
+      -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" \
+      -c:v libx264 -preset medium -crf 20 -c:a aac -b:a 192k "$2"
+    echo "-> $2"
+    ;;
+
+  trim)
+    # -ss before -i seeks fast; -t is duration in seconds.
+    ffmpeg -y -ss "$3" -i "$1" -t "$4" -c:v libx264 -preset fast -crf 20 -c:a aac "$2"
+    echo "-> $2"
+    ;;
+
+  silence)
+    # -35dB over 0.4s is a good default for talking-head footage.
+    ffmpeg -i "$1" -af silencedetect=noise=-35dB:d=0.4 -f null - 2>&1 \
+      | grep -E 'silence_(start|end)' || echo "no silence detected"
+    ;;
+
+  cut-silence)
+    IN="$1"; OUT="$2"
+    TMP="$(mktemp -d)"
+    trap 'rm -rf "$TMP"' EXIT
+
+    DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$IN")
+    ffmpeg -i "$IN" -af silencedetect=noise=-35dB:d=0.4 -f null - 2>"$TMP/log" || true
+
+    python3 - "$TMP/log" "$DUR" "$TMP/segs" <<'PY'
+import re, sys
+log, dur, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+txt = open(log, errors="replace").read()
+starts = [float(x) for x in re.findall(r'silence_start: ([\d.]+)', txt)]
+ends   = [float(x) for x in re.findall(r'silence_end: ([\d.]+)', txt)]
+
+# Keep the spans BETWEEN silences; pad slightly so speech isn't clipped.
+keep, cursor = [], 0.0
+for i, s in enumerate(starts):
+    e = ends[i] if i < len(ends) else dur
+    if s - cursor > 0.25:
+        keep.append((max(0, cursor - 0.05), s + 0.05))
+    cursor = e
+if dur - cursor > 0.25:
+    keep.append((max(0, cursor - 0.05), dur))
+
+with open(out, "w") as f:
+    for a, b in keep:
+        f.write(f"{a:.3f} {b:.3f}\n")
+print(f"{len(keep)} segments kept")
+PY
+
+    : > "$TMP/list.txt"
+    i=0
+    while read -r a b; do
+      ffmpeg -y -loglevel error -ss "$a" -to "$b" -i "$IN" \
+        -c:v libx264 -preset fast -crf 20 -c:a aac "$TMP/p$i.mp4"
+      echo "file '$TMP/p$i.mp4'" >> "$TMP/list.txt"
+      i=$((i+1))
+    done < "$TMP/segs"
+
+    [ "$i" -gt 0 ] || die "nothing left after cutting silence"
+    ffmpeg -y -loglevel error -f concat -safe 0 -i "$TMP/list.txt" -c copy "$OUT"
+    echo "-> $OUT ($i segments)"
+    ;;
+
+  transcribe)
+    # whisper-cpp writes <out>.srt next to the path you give it.
+    MODEL="${WHISPER_MODEL:-${WA_DIR:-$HOME/Workflow Automation}/models/ggml-base.en.bin}"
+    [ -f "$MODEL" ] || die "whisper model missing: $MODEL"
+    command -v whisper-cli >/dev/null || die "whisper-cli not found (brew install whisper-cpp)"
+    TMPW="$(mktemp -d)"; trap 'rm -rf "$TMPW"' EXIT
+    # whisper-cpp needs 16kHz mono PCM.
+    ffmpeg -y -loglevel error -i "$1" -ar 16000 -ac 1 -c:a pcm_s16le "$TMPW/a.wav"
+    OUTBASE="${2%.srt}"
+    whisper-cli -m "$MODEL" -f "$TMPW/a.wav" -osrt -of "$OUTBASE" >/dev/null 2>&1 \
+      || die "transcription failed"
+    echo "-> ${OUTBASE}.srt"
+    ;;
+
+  autocaption)
+    # One shot: transcribe, then burn the subtitles in.
+    IN="$1"; OUT="$2"
+    TMPA="$(mktemp -d)"; trap 'rm -rf "$TMPA"' EXIT
+    "$0" transcribe "$IN" "$TMPA/sub" || exit 1
+    "$0" captions "$IN" "$OUT" "$TMPA/sub.srt"
+    ;;
+
+  captions)
+    IN="$1"; OUT="$2"; SRT="$3"
+    [ -f "$SRT" ] || die "subtitle file not found: $SRT"
+
+    # NOTE: do not use `grep -q` here. It exits on the first match, ffmpeg gets
+    # SIGPIPE (141), and `set -o pipefail` then fails the pipeline even though
+    # the match succeeded. Capture the count instead so the reader drains stdout.
+    HAS_ASS="$("$FFMPEG" -hide_banner -filters 2>/dev/null | grep -c ' subtitles ' || true)"
+    if [ "${HAS_ASS:-0}" -gt 0 ]; then
+      # Burn in. Copy the .srt to a plain cwd-relative name first — the
+      # subtitles filter's arg parser chokes on ':' and spaces in paths, and
+      # escaping it portably is far more fragile than sidestepping it.
+      TMPS="$(mktemp -d)"; trap 'rm -rf "$TMPS"' EXIT
+      cp "$SRT" "$TMPS/s.srt"
+      ( cd "$TMPS" && ffmpeg -y -loglevel error -i "$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")" \
+          -vf "subtitles=s.srt:force_style='FontName=Helvetica,Bold=1,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,MarginV=60'" \
+          -c:v libx264 -preset medium -crf 20 -c:a copy "$TMPS/out.mp4" ) \
+        || die "burn-in failed"
+      mv "$TMPS/out.mp4" "$OUT"
+      echo "-> $OUT (burned in)"
+    else
+      # No libass in this ffmpeg build. Embed as a soft subtitle track instead
+      # so the work isn't lost — but say so, because TikTok/Reels/Shorts will
+      # NOT display a soft track. Those need a real burn-in.
+      echo "WARNING: this ffmpeg has no libass, so captions cannot be burned in." >&2
+      echo "         Embedding a soft subtitle track instead." >&2
+      echo "         Short-form platforms will not show it. Fix: brew reinstall ffmpeg" >&2
+      ffmpeg -y -loglevel error -i "$IN" -i "$SRT" \
+        -c:v copy -c:a copy -c:s mov_text -metadata:s:s:0 language=eng "$OUT" \
+        || die "soft-subtitle embed failed"
+      echo "-> $OUT (soft track — not visible on TikTok/Reels)"
+    fi
+    ;;
+
+  thumb)
+    ffmpeg -y -ss "${3:-00:00:01}" -i "$1" -vframes 1 -q:v 2 "$2"
+    echo "-> $2"
+    ;;
+
+  concat)
+    OUT="$1"; shift
+    TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+    for f in "$@"; do
+      # Re-encode to a common format so concat doesn't fail on mismatched inputs.
+      echo "file '$(cd "$(dirname "$f")" && pwd)/$(basename "$f")'" >> "$TMP/list.txt"
+    done
+    ffmpeg -y -f concat -safe 0 -i "$TMP/list.txt" \
+      -c:v libx264 -preset medium -crf 20 -c:a aac "$OUT"
+    echo "-> $OUT"
+    ;;
+
+  speed)
+    F="$3"
+    # Audio tempo must be chained if outside 0.5–2.0; this covers the common range.
+    ffmpeg -y -i "$1" -filter_complex \
+      "[0:v]setpts=PTS/${F}[v];[0:a]atempo=${F}[a]" -map "[v]" -map "[a]" \
+      -c:v libx264 -preset medium -crf 20 "$2"
+    echo "-> $2"
+    ;;
+
+  audio)
+    ffmpeg -y -i "$1" -vn -acodec libmp3lame -q:a 2 "$2"
+    echo "-> $2"
+    ;;
+
+  compress)
+    ffmpeg -y -i "$1" -c:v libx264 -preset slow -crf 28 -c:a aac -b:a 128k "$2"
+    echo "-> $2  ($(du -h "$2" | cut -f1))"
+    ;;
+
+  *)
+    sed -n '2,22p' "$0" | sed 's/^# //; s/^#$//'
+    exit 1
+    ;;
+esac

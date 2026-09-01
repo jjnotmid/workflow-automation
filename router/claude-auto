@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# claude-auto — autonomous provider failover.
+#
+# THE PROBLEM: Claude Code binds its model provider at process start. It cannot
+# switch providers mid-session. That is a property of the client, not a setting.
+#
+# THE WORKAROUND: supervise the process. When `claude` exits, inspect the
+# session transcript for a usage-limit error. If found, save a handoff brief and
+# immediately relaunch on the next tier with `--continue`, which replays the
+# local .jsonl transcript so the new model picks up the SAME conversation.
+#
+# You see a brief "switching providers" line and the session continues. No
+# copy-pasting, no lost context, no manual relaunch.
+#
+# Tier order is deliberately cost-aware:
+#   1. claude       Anthropic subscription   (already paid for)
+#   2. claude-free  OpenRouter free models   ($0)
+#   3. claude-ar    AgentRouter opus-5       (spends the $225 — last resort)
+#
+# Usage:
+#   claude-auto                 start supervised session
+#   claude-auto --heavy         start directly on AgentRouter (hard task)
+#   claude-auto -- <args>       pass args through to claude
+
+set -uo pipefail
+
+WA_DIR="${WA_DIR:-$HOME/Workflow Automation}"
+ROUTER_DIR="$WA_DIR/router"
+STATE_DIR="$WA_DIR/.router-state"
+mkdir -p "$STATE_DIR"
+
+# shellcheck source=/dev/null
+source "$ROUTER_DIR/credentials.env" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$ROUTER_DIR/handoff.sh" 2>/dev/null || true
+
+PROJECT_SESSION_DIR="$HOME/.claude/projects/$(echo "$PWD" | sed 's/[^a-zA-Z0-9]/-/g')"
+
+# Strings Claude Code prints/records when the subscription limit is reached.
+LIMIT_PATTERNS='usage limit reached|rate_limit_error|Claude usage limit|exceeded your.*limit|upgrade to increase|429'
+
+log() { printf '\033[36m[auto]\033[0m %s\n' "$*" >&2; }
+warn() { printf '\033[33m[auto]\033[0m %s\n' "$*" >&2; }
+
+# Did the session that just ended die because of a usage limit?
+hit_limit() {
+  local newest
+  newest=$(ls -t "$PROJECT_SESSION_DIR"/*.jsonl 2>/dev/null | head -1)
+  [ -n "$newest" ] || return 1
+  # Only inspect the tail — the error lands in the final few records.
+  tail -c 60000 "$newest" 2>/dev/null | grep -qiE "$LIMIT_PATTERNS"
+}
+
+run_tier() {
+  local tier="$1"; shift
+  case "$tier" in
+    anthropic)
+      log "tier 1: Anthropic (your subscription)"
+      claude "$@"
+      ;;
+    free)
+      log "tier 2: OpenRouter free models (\$0)"
+      # Start the proxy directly — router.sh is zsh-only and breaks under `set -u`.
+      if ! curl -sf "http://127.0.0.1:${FREE_PROXY_PORT:-8787}/health" -o /dev/null --max-time 5; then
+        ( cd "$ROUTER_DIR" && nohup python3 free_proxy.py \
+            --port "${FREE_PROXY_PORT:-8787}" > /tmp/free_proxy.log 2>&1 & )
+        sleep 2
+      fi
+      ANTHROPIC_BASE_URL="http://127.0.0.1:${FREE_PROXY_PORT:-8787}" \
+      ANTHROPIC_AUTH_TOKEN="free-proxy" \
+      ANTHROPIC_API_KEY="free-proxy" \
+      ANTHROPIC_MODEL="claude-sonnet-4-5-20250929" \
+      ANTHROPIC_SMALL_FAST_MODEL="claude-3-5-haiku-20241022" \
+      claude "$@"
+      ;;
+    agentrouter)
+      warn "tier 3: AgentRouter opus-5 — THIS SPENDS MONEY"
+      ANTHROPIC_BASE_URL="$AGENTROUTER_BASE_URL" \
+      ANTHROPIC_AUTH_TOKEN="$AGENTROUTER_API_KEY" \
+      ANTHROPIC_API_KEY="$AGENTROUTER_API_KEY" \
+      ANTHROPIC_MODEL="claude-opus-5" \
+      ANTHROPIC_SMALL_FAST_MODEL="claude-opus-4-8" \
+      claude "$@"
+      ;;
+  esac
+}
+
+main() {
+  local start_tier="anthropic"
+  local -a passthru=()
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --heavy) start_tier="agentrouter"; shift ;;
+      --free)  start_tier="free"; shift ;;
+      --)      shift; passthru+=("$@"); break ;;
+      *)       passthru+=("$1"); shift ;;
+    esac
+  done
+
+  local tiers
+  case "$start_tier" in
+    anthropic)   tiers="anthropic free agentrouter" ;;
+    free)        tiers="free agentrouter" ;;
+    agentrouter) tiers="agentrouter" ;;
+  esac
+
+  local first=1
+  for tier in $tiers; do
+    local -a args=("${passthru[@]:-}")
+    # After the first tier, resume the same conversation.
+    if [ "$first" -eq 0 ]; then
+      handoff-save >/dev/null 2>&1 || true
+      log "saved handoff brief"
+      args=(--continue "${passthru[@]:-}")
+      log "resuming the SAME conversation on the next tier…"
+    fi
+    first=0
+
+    run_tier "$tier" "${args[@]}"
+    local rc=$?
+
+    if hit_limit; then
+      warn "usage limit detected on tier '$tier' — failing over"
+      echo "$(date '+%F %T') limit hit on $tier" >> "$STATE_DIR/failover.log"
+      continue
+    fi
+
+    # Clean exit, or an error unrelated to limits: stop here.
+    exit $rc
+  done
+
+  warn "all tiers exhausted"
+  exit 1
+}
+
+main "$@"

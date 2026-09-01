@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# wa-bot — the WhatsApp command center.
+#
+# Message your own bot from anywhere; it runs on this Mac with the full
+# workflow toolkit and replies. Voice notes are transcribed locally by whisper,
+# images/docs/video go to Claude, everything uses the same model tiers.
+#
+#   wa-bot allow <number>    authorise a phone number (digits + country code)
+#   wa-bot start             run in the foreground (first run shows a QR)
+#   wa-bot bg                run in the background
+#   wa-bot stop              stop the background bot
+#   wa-bot status            is it running?
+#   wa-bot logs              tail the log
+#   wa-bot unlink            forget the WhatsApp session (forces a re-scan)
+#
+# First run:
+#   1. wa-bot allow 2348012345678      ← your own number
+#   2. wa-bot start
+#   3. On your phone: WhatsApp → Settings → Linked Devices → Link a Device
+#   4. Scan the QR in the terminal
+#   5. Message yourself — the bot replies from your linked session
+#
+# SECURITY: this runs commands on your Mac in response to WhatsApp messages.
+# Only allowlisted numbers are answered; everything else is dropped silently.
+# Never allowlist a number you do not control.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+DIR="$WA/whatsapp"
+STATE="$WA/.whatsapp"
+LOG="$WA/.logs/whatsapp.log"
+ALLOW="$STATE/allowed.json"
+
+mkdir -p "$STATE" "$WA/.logs"
+
+die() { echo "$*" >&2; exit 1; }
+[ -d "$DIR/node_modules" ] || die "dependencies missing — run: cd '$DIR' && npm install"
+
+running() { pgrep -f "node .*whatsapp/bot.js" >/dev/null; }
+
+case "${1:-}" in
+  allow)
+    num="$(echo "${2:-}" | tr -cd '0-9')"
+    [ -n "$num" ] || die "usage: wa-bot allow 2348012345678"
+    python3 - "$ALLOW" "$num" <<'PY'
+import json, sys, os
+path, num = sys.argv[1], sys.argv[2]
+cur = []
+if os.path.exists(path):
+    cur = json.load(open(path))
+if num not in cur:
+    cur.append(num)
+json.dump(cur, open(path, 'w'), indent=1)
+print(f"allowed: {cur}")
+PY
+    ;;
+
+  start)
+    [ -f "$ALLOW" ] || die "no allowlist yet — run: wa-bot allow <your number>"
+    # Credentials are needed for the AgentRouter tier.
+    set -a; . "$WA/router/credentials.env" 2>/dev/null; set +a
+    export WA_DIR="$WA"
+    exec node "$DIR/bot.js"
+    ;;
+
+  bg)
+    running && { echo "already running"; exit 0; }
+    [ -f "$ALLOW" ] || die "no allowlist yet — run: wa-bot allow <your number>"
+    set -a; . "$WA/router/credentials.env" 2>/dev/null; set +a
+    export WA_DIR="$WA"
+    nohup node "$DIR/bot.js" >> "$LOG" 2>&1 &
+    sleep 2
+    running && echo "bot running in background — logs: wa-bot logs" \
+             || { echo "failed to start; see $LOG" >&2; tail -5 "$LOG"; exit 1; }
+    ;;
+
+  stop)
+    pkill -f "node .*whatsapp/bot.js" && echo "stopped" || echo "was not running"
+    ;;
+
+  status)
+    if running; then
+      echo "running (pid $(pgrep -f 'node .*whatsapp/bot.js' | head -1))"
+      [ -f "$ALLOW" ] && echo "allowed: $(cat "$ALLOW")"
+    else
+      echo "not running"
+    fi
+    ;;
+
+  logs) tail -f "$LOG" ;;
+
+  unlink)
+    rm -rf "$STATE/auth" && echo "session cleared — next start shows a new QR"
+    ;;
+
+  *)
+    sed -n '2,28p' "$0" | sed 's/^# //; s/^#$//'
+    exit 1
+    ;;
+esac

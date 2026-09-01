@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# wa-schedule — run jobs on your Mac automatically, via launchd.
+#
+# This is the local half of "works while I'm asleep". launchd is macOS's native
+# scheduler: it survives reboots, runs without a terminal open, and (unlike
+# cloud agents) can touch your actual files, Mail.app, and video footage.
+#
+#   wa-schedule list                 show installed jobs + status
+#   wa-schedule add-daily [HH:MM]    morning brief (default 07:30)
+#   wa-schedule add <name> <HH:MM> <command...>
+#   wa-schedule remove <name>
+#   wa-schedule run <name>           trigger now, don't wait for the clock
+#   wa-schedule logs <name>
+#   wa-schedule awake on|off|status  keep the Mac awake for scheduled work
+#
+# CAVEAT: a sleeping Mac runs nothing. launchd will fire a missed job once on
+# wake, but a job scheduled for 03:00 on a sleeping laptop runs whenever you
+# open the lid — not at 03:00. Use `wa-schedule awake on` if timing matters.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+AGENTS="$HOME/Library/LaunchAgents"
+LOGS="$WA/.logs"
+PREFIX="com.joshua.wa"
+
+mkdir -p "$AGENTS" "$LOGS"
+
+plist_path() { echo "$AGENTS/$PREFIX.$1.plist"; }
+
+write_plist() {
+  local name="$1" hh="$2" mm="$3"; shift 3
+  local cmd="$*"
+  cat > "$(plist_path "$name")" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$PREFIX.$name</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>$cmd</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>$hh</integer>
+    <key>Minute</key><integer>$mm</integer>
+  </dict>
+  <key>StandardOutPath</key><string>$LOGS/$name.log</string>
+  <key>StandardErrorPath</key><string>$LOGS/$name.err</string>
+  <key>RunAtLoad</key><false/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>WA_DIR</key><string>$WA</string>
+    <key>PATH</key><string>$WA/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
+PLIST
+}
+
+reload() {
+  local name="$1" p
+  p="$(plist_path "$name")"
+  launchctl unload "$p" 2>/dev/null
+  launchctl load "$p" 2>/dev/null && echo "loaded $PREFIX.$name" \
+    || { echo "failed to load $p" >&2; return 1; }
+}
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  list)
+    shopt -s nullglob
+    found=0
+    for p in "$AGENTS/$PREFIX."*.plist; do
+      found=1
+      name="$(basename "$p" .plist)"; name="${name#$PREFIX.}"
+      status="$(launchctl list 2>/dev/null | grep "$PREFIX.$name" | awk '{print "pid="$1" last_exit="$2}')"
+      [ -n "$status" ] || status="not loaded"
+      time="$(grep -A1 '<key>Hour</key>' "$p" | grep integer | sed 's/[^0-9]//g')"
+      min="$(grep -A1 '<key>Minute</key>' "$p" | grep integer | sed 's/[^0-9]//g')"
+      printf '%-18s %02d:%02d  %s\n' "$name" "${time:-0}" "${min:-0}" "$status"
+    done
+    [ "$found" -eq 0 ] && echo "no scheduled jobs"
+    ;;
+
+  add-daily)
+    t="${1:-07:30}"
+    hh="${t%%:*}"; mm="${t##*:}"
+    write_plist daily "$((10#$hh))" "$((10#$mm))" "'$WA/bin/wa-daily' save"
+    reload daily
+    echo "morning brief scheduled for $t — writes to $WA/journal/"
+    ;;
+
+  add)
+    name="$1"; t="$2"; shift 2
+    hh="${t%%:*}"; mm="${t##*:}"
+    write_plist "$name" "$((10#$hh))" "$((10#$mm))" "$*"
+    reload "$name"
+    ;;
+
+  remove)
+    p="$(plist_path "$1")"
+    launchctl unload "$p" 2>/dev/null
+    rm -f "$p" && echo "removed $1"
+    ;;
+
+  run)
+    launchctl start "$PREFIX.$1" && echo "triggered $1 — check: wa-schedule logs $1"
+    ;;
+
+  logs)
+    echo "--- stdout ---"; tail -30 "$LOGS/$1.log" 2>/dev/null
+    echo "--- stderr ---"; tail -30 "$LOGS/$1.err" 2>/dev/null
+    ;;
+
+  awake)
+    case "${1:-status}" in
+      on)
+        pgrep -f "caffeinate -s -i" >/dev/null && { echo "already awake"; exit 0; }
+        nohup caffeinate -s -i >/dev/null 2>&1 &
+        echo "Mac will stay awake (display can still sleep). Turn off: wa-schedule awake off"
+        ;;
+      off)
+        pkill -f "caffeinate -s -i" && echo "sleep re-enabled" || echo "was not held awake"
+        ;;
+      status)
+        pgrep -f "caffeinate -s -i" >/dev/null \
+          && echo "held awake by caffeinate" || echo "normal sleep behaviour"
+        pmset -g | grep -E "^ *sleep " || true
+        ;;
+    esac
+    ;;
+
+  *)
+    sed -n '2,20p' "$0" | sed 's/^# //; s/^#$//'
+    exit 1
+    ;;
+esac

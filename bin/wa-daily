@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# wa-daily — the morning driver.
+#
+# Gathers everything needed to start the day into one brief, so a session can
+# open already knowing where things stand instead of re-deriving it.
+#
+#   wa-daily            print today's brief
+#   wa-daily save       write it to journal/YYYY-MM-DD.md and ruflo memory
+#
+# Built as a script rather than a ruflo workflow because `ruflo workflow run -f`
+# collapses a multi-step definition into a single "Execute" stage — the step
+# graph in workflows/daily.json is not actually fanned out to agents.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+TODAY="$(date '+%Y-%m-%d')"
+
+TRACKED=(
+  "$WA"
+  "$HOME/Projects/sifta"
+)
+
+brief() {
+  echo "# Daily brief — $(date '+%A, %d %B %Y')"
+  echo
+
+  echo "## Where things stand"
+  echo
+  local any=0
+  for p in "${TRACKED[@]}"; do
+    [ -d "$p/.git" ] || continue
+    any=1
+    local name branch dirty ahead
+    name="$(basename "$p")"
+    branch="$(git -C "$p" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    dirty="$(git -C "$p" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    echo "**$name** — \`$branch\`, $dirty uncommitted file(s)"
+    local last24
+    last24="$(git -C "$p" log --oneline --since='24 hours ago' 2>/dev/null)"
+    if [ -n "$last24" ]; then
+      echo '```'
+      echo "$last24"
+      echo '```'
+    else
+      echo "_no commits in the last 24h_"
+    fi
+    echo
+  done
+  [ "$any" -eq 0 ] && echo "_no tracked git projects_"$'\n'
+
+  echo "## Needs attention"
+  echo
+  local flagged=0
+  for p in "${TRACKED[@]}"; do
+    [ -d "$p/.git" ] || continue
+    local name; name="$(basename "$p")"
+    if [ -n "$(git -C "$p" status --porcelain 2>/dev/null)" ]; then
+      echo "- \`$name\` left uncommitted overnight"
+      flagged=1
+    fi
+    # Branch with no activity in a week is probably stalled or forgotten.
+    local last_commit now age
+    last_commit="$(git -C "$p" log -1 --format=%ct 2>/dev/null)"
+    if [ -n "$last_commit" ]; then
+      now="$(date +%s)"
+      age=$(( (now - last_commit) / 86400 ))
+      [ "$age" -ge 7 ] && { echo "- \`$name\` has been quiet for ${age} days"; flagged=1; }
+    fi
+  done
+  [ "$flagged" -eq 0 ] && echo "_nothing flagged_"
+  echo
+
+  echo "## System"
+  echo
+  local ar_code
+  ar_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    "${AGENTROUTER_BASE_URL:-https://agentrouter.org}/v1/models" \
+    -H "Authorization: Bearer ${AGENTROUTER_API_KEY:-}" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "user-agent: claude-cli/2.0.1 (external, cli)" \
+    -H "x-stainless-lang: js" -H "x-stainless-runtime: node" --max-time 12)
+  [ "$ar_code" = "200" ] && echo "- fallback tiers: reachable" \
+                         || echo "- fallback tiers: AgentRouter HTTP $ar_code"
+  echo "- open GitHub notifications: $(gh api notifications --jq 'length' 2>/dev/null || echo '?')"
+  echo
+
+  echo "## Today"
+  echo
+  echo "_Rank at most 5 items. Carry over anything flagged above._"
+  echo "_Give each one an explicit \"done when\" line._"
+  echo
+  if [ -f "$WA/NOTES.md" ]; then
+    echo "Carried from NOTES.md:"
+    echo
+    sed 's/^/> /' "$WA/NOTES.md"
+  fi
+}
+
+case "${1:-}" in
+  save)
+    mkdir -p "$WA/journal"
+    out="$WA/journal/$TODAY.md"
+    brief > "$out"
+    echo "saved -> $out"
+    ( cd "$WA" && ruflo memory store --namespace daily --key "$TODAY" \
+        --value "$(head -c 4000 "$out")" >/dev/null 2>&1 ) \
+      && echo "stored in ruflo memory (namespace: daily)" \
+      || echo "note: ruflo memory store unavailable"
+    ;;
+  *)
+    source "$WA/router/credentials.env" 2>/dev/null
+    brief
+    ;;
+esac

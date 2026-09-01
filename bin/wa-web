@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# wa-web — the web command center.
+#
+# Chat with your assistant, run a fleet of named agents, or hand a goal to a
+# supervisor that decomposes it and delegates.
+#
+#   wa-web start     run in the foreground
+#   wa-web bg        run in the background
+#   wa-web stop
+#   wa-web status
+#   wa-web logs
+#   wa-web open      open it in the browser
+#
+# Binds to 127.0.0.1 only. It drives real tools on this machine, so it must not
+# be exposed to the network without authentication in front of it.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+PORT="${WA_WEB_PORT:-7777}"
+LOG="$WA/.logs/web.log"
+mkdir -p "$WA/.logs"
+
+running() { lsof -ti tcp:"$PORT" >/dev/null 2>&1; }
+
+case "${1:-}" in
+  start)
+    set -a; . "$WA/router/credentials.env" 2>/dev/null; set +a
+    export WA_DIR="$WA"
+    exec node "$WA/web/server.js" --port "$PORT"
+    ;;
+
+  bg)
+    running && { echo "already running — http://127.0.0.1:$PORT"; exit 0; }
+    set -a; . "$WA/router/credentials.env" 2>/dev/null; set +a
+    export WA_DIR="$WA"
+    nohup node "$WA/web/server.js" --port "$PORT" >> "$LOG" 2>&1 &
+    sleep 2
+    if running; then
+      echo "command center: http://127.0.0.1:$PORT"
+      command -v open >/dev/null && open "http://127.0.0.1:$PORT"
+    else
+      echo "failed to start; see $LOG" >&2; tail -5 "$LOG"; exit 1
+    fi
+    ;;
+
+  stop)   lsof -ti tcp:"$PORT" | xargs kill -9 2>/dev/null && echo stopped || echo "was not running" ;;
+  status) running && echo "running — http://127.0.0.1:$PORT" || echo "not running" ;;
+  logs)   tail -f "$LOG" ;;
+  open)   open "http://127.0.0.1:$PORT" ;;
+
+  *) sed -n '2,18p' "$0" | sed 's/^# //; s/^#$//'; exit 1 ;;
+esac

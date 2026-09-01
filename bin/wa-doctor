@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# wa-doctor — one command to see what's working and what isn't.
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+source "$WA/router/credentials.env" 2>/dev/null
+
+pass() { printf '\033[32m  ✓\033[0m %s\n' "$*"; }
+fail() { printf '\033[31m  ✗\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m  !\033[0m %s\n' "$*"; }
+head_() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+head_ "Model tiers"
+code=$(curl -s -o /dev/null -w "%{http_code}" "$AGENTROUTER_BASE_URL/v1/models" \
+  -H "Authorization: Bearer $AGENTROUTER_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "user-agent: claude-cli/2.0.1 (external, cli)" \
+  -H "x-stainless-lang: js" -H "x-stainless-runtime: node" --max-time 15)
+[ "$code" = "200" ] && pass "AgentRouter reachable (paid — heavy tasks only)" \
+                    || fail "AgentRouter HTTP $code"
+
+code=$(curl -s -o /dev/null -w "%{http_code}" "$OPENROUTER_BASE_URL/models" \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" --max-time 15)
+[ "$code" = "200" ] && pass "OpenRouter reachable (free tier)" || fail "OpenRouter HTTP $code"
+
+curl -sf "http://127.0.0.1:${FREE_PROXY_PORT:-8787}/health" -o /dev/null --max-time 5 \
+  && pass "free proxy running" || warn "free proxy stopped (auto-starts with claude-free)"
+
+head_ "Failover"
+[ -x "$WA/router/claude-auto" ] && pass "claude-auto supervisor installed" || fail "claude-auto missing"
+[ -f "$WA/HANDOFF.md" ] && pass "handoff brief present ($(date -r "$WA/HANDOFF.md" '+%H:%M'))" \
+                        || warn "no handoff yet (written on session end)"
+grep -q handoff-inject "$WA/.claude/settings.json" 2>/dev/null \
+  && pass "handoff auto-injects into new sessions" || fail "handoff hook not wired"
+
+head_ "Capabilities"
+command -v ffmpeg >/dev/null && pass "ffmpeg — video editing" || fail "ffmpeg missing"
+{ command -v cliclick >/dev/null || [ -x /usr/local/bin/cliclick ]; } \
+  && pass "cliclick — screen control" || fail "cliclick missing (run setup.sh)"
+osascript -e 'tell application "Mail" to get name of every account' >/dev/null 2>&1 \
+  && pass "Mail.app — email sending" || fail "Mail.app not reachable"
+ghuser=$(gh api user --jq .login 2>/dev/null)
+[ -n "$ghuser" ] && pass "gh — GitHub ($ghuser)" || fail "gh not authenticated"
+if [ -x "$WA/.venv/bin/agent-reach" ]; then
+  pass "Agent-Reach — social read (installed)"
+elif [ -d "$WA/vendor/Agent-Reach" ]; then
+  warn "Agent-Reach cloned but NOT installed (run setup.sh)"
+else
+  fail "Agent-Reach missing"
+fi
+
+if command -v whisper-cli >/dev/null; then
+  if [ -f "$WA/models/ggml-base.en.bin" ]; then
+    pass "whisper-cpp — transcription + auto-captions"
+  else
+    warn "whisper-cli installed, model missing ($WA/models/ggml-base.en.bin)"
+  fi
+else
+  warn "whisper-cpp not installed (brew install whisper-cpp)"
+fi
+
+if [ -d "$WA/vendor/OpenMontage" ]; then
+  n_pipe=$(ls "$WA/vendor/OpenMontage/pipeline_defs" 2>/dev/null | wc -l | tr -d ' ')
+  if [ -d "$WA/.venv" ]; then
+    pass "OpenMontage — $n_pipe pipelines"
+  else
+    warn "OpenMontage cloned ($n_pipe pipelines), deps NOT installed (run setup.sh)"
+  fi
+else
+  fail "OpenMontage missing"
+fi
+
+# wa-video prefers the keg-only ffmpeg-full build, so check that same binary.
+ff_full="$(ls -d /usr/local/Cellar/ffmpeg-full/*/bin/ffmpeg 2>/dev/null | sort -V | tail -1)"
+ff_check="${ff_full:-$(command -v ffmpeg)}"
+if [ -n "$ff_check" ] && [ "$("$ff_check" -hide_banner -filters 2>/dev/null | grep -c ' subtitles ')" -gt 0 ]; then
+  pass "libass — captions BURN IN (verified)"
+else
+  warn "no libass — captions embed as a soft track only"
+  warn "  short-form platforms won't show them; fix: brew install ffmpeg-full"
+fi
+
+head_ "Voice"
+command -v rec >/dev/null && pass "sox — microphone capture" || fail "sox missing"
+if [ -s "$WA/.voice/test.wav" ]; then
+  pass "mic verified (recorded audio successfully)"
+else
+  warn "mic untested — run: wa-voice test"
+fi
+say -v '?' >/dev/null 2>&1 && pass "macOS speech synthesis" || fail "say unavailable"
+
+head_ "WhatsApp command center"
+if [ -d "$WA/whatsapp/node_modules" ]; then
+  pass "Baileys installed"
+else
+  warn "deps missing — cd whatsapp && npm install"
+fi
+if [ -f "$WA/.whatsapp/allowed.json" ]; then
+  pass "allowlist: $(cat "$WA/.whatsapp/allowed.json" | tr -d '\n ')"
+else
+  warn "no allowlist — run: wa-bot allow <your number>"
+fi
+if [ -d "$WA/.whatsapp/auth" ]; then
+  pass "WhatsApp session linked"
+else
+  warn "not linked — run: wa-bot start, then scan the QR"
+fi
+pgrep -f "node .*whatsapp/bot.js" >/dev/null \
+  && pass "bot is running" || warn "bot not running (wa-bot bg)"
+
+head_ "Web command center"
+[ -f "$WA/web/server.js" ] && pass "server installed (no dependencies)" || fail "web/server.js missing"
+if pgrep -f "node .*web/server.js" >/dev/null; then
+  pass "running — http://127.0.0.1:${WA_WEB_PORT:-7777}"
+else
+  warn "not running (wa-web bg)"
+fi
+
+head_ "Automation"
+n_jobs=$(ls "$HOME/Library/LaunchAgents"/com.joshua.wa.*.plist 2>/dev/null | wc -l | tr -d ' ')
+[ "$n_jobs" -gt 0 ] && pass "$n_jobs scheduled job(s) — see: wa-schedule list" \
+                    || warn "no scheduled jobs (run: wa-schedule add-daily 07:30)"
+pgrep -f "caffeinate -s -i" >/dev/null \
+  && pass "Mac held awake for scheduled work" \
+  || warn "Mac sleeps normally — scheduled jobs run late (wa-schedule awake on)"
+
+head_ "Agents & orchestration"
+n=$(python3 -c "import json;print(len(json.load(open('$WA/.router-state/agents-index.json'))))" 2>/dev/null)
+[ -n "$n" ] && pass "$n specialist agents indexed" || warn "run: wa-agent index"
+command -v ruflo >/dev/null && pass "ruflo $(ruflo --version 2>/dev/null | head -1 | awk '{print $2}')" || fail "ruflo missing"
+[ -f "$WA/workflows/daily.json" ] && pass "daily workflow defined" || warn "no daily workflow"
+
+head_ "macOS permissions"
+# screencapture silently refuses dotfile destinations, so use a normal name.
+probe="${TMPDIR:-/tmp}/wa_probe.png"
+rm -f "$probe"
+screencapture -x "$probe" 2>/dev/null
+if [ -s "$probe" ]; then
+  pass "Screen Recording granted"
+else
+  fail "Screen Recording NOT granted — System Settings → Privacy & Security"
+fi
+rm -f "$probe"
+
+if cliclick p >/dev/null 2>&1 && ! cliclick p 2>&1 | grep -qi "not enabled"; then
+  pass "Accessibility granted (clicks & typing work)"
+else
+  fail "Accessibility NOT granted — clicks and typing will be ignored"
+fi
+
+echo

@@ -1,0 +1,41 @@
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+vendor/
+router/credentials.env
+.claude-flow/data/
+.claude-flow/logs/
+*.db
+whatsapp/node_modules/
+.whatsapp/
+.voice/
+.screenshots/
+.logs/
+models/
+journal/
+.web/
+web/node_modules/
+
+# Runtime state / caches — not source
+.agents/
+.claude-flow/
+.router-state/
+.swarm/
+.venv/
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
+
+# Personal documents — not code, don't belong in git history
+*.pdf
+*.docx
+*.pptx
+HANDOVER-full-session.md
+BACKEND_AUDIT.md
+NEPAWatch\ Decision\ Memo_\ Ten-Year\ Commitment\ and\ Investor\ Fit\ Analysis.md
+NEPAWatch_\ Market\ Verdict\ on\ Paying\ Customers\ for\ Independent\ Electricity\ Data\ in\ Nigeria.md
+Path\ to\ a\ VC\ Fund\ by\ 30_\ A\ Decade-Long\ Strategic\ Roadmap\ for\ Usifoh\ Joshua\ \(2026-2037\).md

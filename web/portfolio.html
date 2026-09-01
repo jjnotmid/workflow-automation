@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usifoh Joshua - Software Engineer & Tech Entrepreneur</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 0;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .profile-img {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 5px solid white;
+            margin: 0 auto 20px;
+            display: block;
+            background-color: #ddd;
+        }
+
+        nav {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+
+        nav ul {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            flex-wrap: wrap;
+        }
+
+        nav li {
+            margin: 0 15px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        nav a:hover {
+            background: #3498db;
+        }
+
+        .section {
+            background: white;
+            margin-bottom: 30px;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 2rem;
+            margin-bottom: 25px;
+            color: #2c3e50;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #3498db;
+            display: inline-block;
+        }
+
+        .about-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .about-text h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .about-text p {
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            margin-bottom: 12px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+            color: #34495e;
+        }
+
+        .skills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .skill-category {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .skill-category h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .skill-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .skill-tag {
+            background: #3498db;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+        }
+
+        .ventures-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .venture-card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .venture-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .venture-header {
+            background: #3498db;
+            color: white;
+            padding: 20px;
+        }
+
+        .venture-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .venture-body {
+            padding: 20px;
+        }
+
+        .venture-body h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .venture-body p {
+            margin-bottom: 12px;
+            color: #555;
+        }
+
+        .venture-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .achievement-card {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .achievement-card h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .achievement-card p {
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .achievement-card .badge {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+
+        .timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .timeline::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            background: #3498db;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -3px;
+        }
+
+        .timeline-item {
+            padding: 20px 40px;
+            position: relative;
+            background: white;
+            width: 50%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-item:nth-child(odd) {
+            left: 0;
+        }
+
+        .timeline-item:nth-child(even) {
+            left: 50%;
+        }
+
+        .timeline-item:nth-child(odd)::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border: 4px solid #3498db;
+            top: 50%;
+            right: -8px;
+            transform: translateY(-50%);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .timeline-item:nth-child(even)::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border: 4px solid #3498db;
+            top: 50%;
+            left: -8px;
+            transform: translateY(-50%);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .timeline-content {
+            padding: 15px 0;
+        }
+
+        .timeline-content h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .timeline-content h4 {
+            color: #3498db;
+            margin-bottom: 8px;
+        }
+
+        .timeline-content p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .timeline-date {
+            display: inline-block;
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .contact-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background: #2c80b9;
+        }
+
+        .btn-primary {
+            background: #2ecc71;
+        }
+
+        .btn-primary:hover {
+            background: #27ae60;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .social-links a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 45px;
+            height: 45px;
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            text-decoration: none;
+            font-size: 1.2rem;
+            transition: background 0.3s;
+        }
+
+        .social-links a:hover {
+            background: #2c80b9;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 50px;
+            color: #7f8c8d;
+            border-top: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+            .about-content {
+                grid-template-columns: 1fr;
+            }
+
+            .timeline-item {
+                width: 100%;
+                padding: 15px 20px;
+            }
+
+            .timeline-item:nth-child(even) {
+                left: 0;
+            }
+
+            .contact-form {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 2.2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            nav ul {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            nav li {
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="https://via.placeholder.com/200x200/3498db/white?text=UJ" alt="Usifoh Joshua" class="profile-img">
+        <h1>Usifoh Joshua</h1>
+        <p>Software Engineer & Tech Entrepreneur | Lagos, Nigeria</p>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="#about">About</a></li>
+            <li><a href="#skills">Skills</a></li>
+            <li><a href="#ventures">Ventures</a></li>
+            <li><a href="#achievements">Achievements</a></li>
+            <li><a href="#timeline">Timeline</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <section id="about" class="section">
+            <h2 class="section-title">About Me</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <h2>Who I Am</h2>
+                    <p>I'm a 19-year-old self-taught software engineer and tech entrepreneur from Lagos, Nigeria. I started coding at age 8 and built my first paid website at age 13 entirely on my phone. My journey combines deep technical expertise with practical business acumen, allowing me to build products that solve real problems while creating sustainable ventures.</p>
+
+                    <p>Currently studying Petroleum & Gas Engineering at the University of Lagos (UNILAG), I maintain a balance between academic pursuits and entrepreneurial ventures, treating my degree as "cheap insurance" while focusing on building impactful technology solutions.</p>
+
+                    <h2>Current Focus</h2>
+                    <p>My primary focus is on building Blu Tech Learn into a viable B2B edtech platform while leveraging my positions at N28 Consulting and Delphi Education Hub to gain corporate experience and financial stability to clear debt and fund future ventures.</p>
+                </div>
+
+                <div class="about-info">
+                    <div class="info-item">
+                        <span class="info-label">Age:</span>
+                        <span>19 years old</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Location:</span>
+                        <span>Lagos, Nigeria</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Education:</span>
+                        <span>B.Sc. Petroleum & Gas Engineering, UNILAG (Expected 2030)</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Current Roles:</span>
+                        <span>Tech Officer @ N28 Consulting, Growth Lead @ Delphi Education Hub</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Primary Focus:</span>
+                        <span>Blu Tech Learn (AI-powered learning platform)</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Financial Goal:</span>
+                        <span>Debt-free by January 2027</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="skills" class="section">
+            <h2 class="section-title">Technical Skills</h2>
+            <div class="skills-grid">
+                <div class="skill-category">
+                    <h3>Languages</h3>
+                    <div class="skill-list">
+                        <span class="skill-tag">TypeScript</span>
+                        <span class="skill-tag">JavaScript</span>
+                        <span class="skill-tag">Python</span>
+                        <span class="skill-tag">SQL</span>
+                    </div>
+                </div>
+
+                <div class="skill-category">
+                    <h3>Frontend</h3>
+                    <div class="skill-list">
+                        <span class="skill-tag">React</span>
+                        <span class="skill-tag">Next.js</span>
+                        <span class="skill-tag">Tailwind CSS</span>
+                        <span class="skill-tag">HTML5</span>
+                        <span class="skill-tag">CSS3</span>
+                    </div>
+                </div>
+
+                <div class="skill-category">
+                    <h3>Backend & Dev</h3>
+                    <div class="skill-list">
+                        <span class="skill-tag">Node.js</span>
+                        <span class="skill-tag">PostgreSQL</span>
+                        <span class="skill-tag">Supabase</span>
+                        <span class="skill-tag">Deno</span>
+                        <span class="skill-tag">REST APIs</span>
+                        <span class="skill-tag">Auth/RBAC</span>
+                    </div>
+                </div>
+
+                <div class="skill-category">
+                    <h3>Tools & Platforms</h3>
+                    <div class="skill-list">
+                        <span class="skill-tag">Git</span>
+                        <span class="skill-tag">GitHub</span>
+                        <span class="skill-tag">Vercel</span>
+                        <span class="skill-tag">Claude Code</span>
+                        <span class="skill-tag">AI Agents</span>
+                        <span class="skill-tag">Linux/Unix</span>
+                    </div>
+                </div>
+
+                <div class="skill-category">
+                    <h3>Business Skills</h3>
+                    <div class="skill-list">
+                        <span class="skill-tag">Product Management</span>
+                        <span class="skill-tag">Sales & Business Development</span>
+                        <span class="skill-tag">Financial Modeling</span>
+                        <span class="skill-tag">Team Leadership</span>
+                        <span class="skill-tag">Contract Negotiation</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ventures" class="section">
+            <h2 class="section-title">My Ventures</h2>
+            <div class="ventures-grid">
+                <div class="venture-card">
+                    <div class="venture-header">
+                        <h3>NEPAWatch</h3>
+                    </div>
+                    <div class="venture-body">
+                        <h4>Power Outage Tracking Platform</h4>
+                        <p>Live since January 2026, NEPAWatch is Nigeria's independent power reliability record that provides street-level outage reports, AI-powered predictions, and community-driven insights.</p>
+                        <div class="venture-stats">
+                            <span>1,500+ Users</span>
+                            <span>36 States + FCT</span>
+                            <span>₦0 Ad Spend</span>
+                        </div>
+                        <p><strong>Tech Stack:</strong> Next.js + Supabase, Row-level Security, RBAC, Public API</p>
+                        <p><strong>Recognition:</strong> Nominated for ULES Awards 2026 Startup Visionary Award</p>
+                    </div>
+                </div>
+
+                <div class="venture-card">
+                    <div class="venture-header">
+                        <h3>Blu Tech Learn</h3>
+                    </div>
+                    <div class="venture-body">
+                        <h4>AI-Powered Learning Platform</h4>
+                        <p>Co-founded AI-powered learning platform with 350+ students and 40+ instructors on waitlist. Planning to pivot to B2B corporate training and bootcamp-to-job placement model in year two.</p>
+                        <div class="venture-stats">
+                            <span>350+ Students</span>
+                            <span>40+ Instructors</span>
+                            <span>Pre-launch Stage</span>
+                        </div>
+                        <p><strong>Vision:</strong> Transform education in Africa through AI-enabled personalized learning pathways</p>
+                        <p><strong>Tech Stack:</strong> React, Node.js, PostgreSQL, AI/ML integration</p>
+                    </div>
+                </div>
+
+                <div class="venture-card">
+                    <div class="venture-header">
+                        <h3>Blu Tech Development</h3>
+                    </div>
+                    <div class="venture-body">
+                        <h4>Software Development Studio</h4>
+                        <p>My software studio with five developers, specializing in client work, CRM automation, and pipeline solutions. Successfully negotiated a $35,000 international contract independently.</p>
+                        <div class="venture-stats>
+                            <span>5 Developers</span>
+                            <span>$35k International Contract</span>
+                            <span>51/49 Equity Split</span>
+                        </div>
+                        <p><strong>Focus:</strong> Building scalable software solutions for African businesses</p>
+                        <p><strong>Notable Achievement:</strong> Identified and corrected ₦17.6M phantom balance in AutoRent ledger</p>
+                    </div>
+                </div>
+
+                <div class="venture-card">
+                    <div class="venture-header">
+                        <h3>Kudi</h3>
+                    </div>
+                    <div class="venture-body">
+                        <h4>AI Banking Product</h4>
+                        <p>Conversational banking on Telegram that won first place at the Nithub × BMONI Innovation Fair Hackathon. Features secure, single-use transaction authorization without write access to user accounts.</p>
+                        <div class="venture-stats>
+                            <span>Hackathon Winner</span>
+                            <span>₦500k Prize Pool</span>
+                            <span>Telegram-based</span>
+                        </div>
+                        <p><strong>Innovation:</strong> Deterministic code resolves recipient and verifies account without allowing injected text to move money</p>
+                        <p><strong>Architecture:</strong> Language model translates intent but never signs transactions</p>
+                    </div>
+                </div>
+
+                <div class="venture-card">
+                    <div class="venture-header">
+                        <h3>AutoRent</h3>
+                    </div>
+                    <div class="venture-body">
+                        <h4>Car Rental Marketplace</h4>
+                        <p>Two-sided car rental marketplace built with Deno serverless functions, featuring Paystack escrow, HMAC-SHA512 webhook validation, and advanced KYC protocols. Currently parked but represents significant technical achievement.</p>
+                        <div class="venture-stats>
+                            <span>21 Serverless Functions</span>
+                            <span>₦17.6M Phantom Balance Corrected</span>
+                            <span>Paystack Escrow Integrated</span>
+                        </div>
+                        <p><strong>Technical Achievement:</strong> Found and corrected ₦17.6 million phantom balance caused by ledger drift from legacy refunds</p>
+                        <p><strong>Stack:</strong> Deno, PostgreSQL, Paystack, Dojah KYC, PWA</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="achievements" class="section">
+            <h2 class="section-title">Achievements & Recognition</h2>
+            <div class="achievements-grid">
+                <div class="achievement-card">
+                    <div class="badge">Award Nominee</div>
+                    <h3>ULES Awards 2026</h3>
+                    <p>Nominated three times for:</p>
+                    <ul>
+                        <li>Rookie of the Year (Male)</li>
+                        <li>Innovation Award</li>
+                        <li>Startup Visionary Award (NEPAWatch)</li>
+                    </ul>
+                    <p>Las Vegas-themed ceremony scheduled for August 28, 2026</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Grant Applicant</div>
+                    <h3>Fembol Student Innovation Grant 2.0</h3>
+                    <p>Applying with NEPAWatch, reframed as "Nigeria's independent power reliability record"</p>
+                    <p>Total grant pool: ₦10 million</p>
+                    <p>Winner prize: ₦2.5 million</p>
+                    <p>Deadline: August 21, 2026</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Competition Participant</div>
+                    <h3>Wema Bank Hackaholics 7.0</h3>
+                    <p>Participating with NEPAWatch in the Ideathon track</p>
+                    <p>Challenge area: Digital Transformation</p>
+                    <p>Total prize pool: ₦200 million</p>
+                    <p>Ideathon track prize: ₦25 million</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Professional Milestone</div>
+                    <h3>N28 Consulting Offer</h3>
+                    <p>Signed offer as Tech Officer TD2-2, Project Manager</p>
+                    <p>Starting September 1, 2026</p>
+                    <p>Gross: ₦830,473.89/month | Net: ₦620,000/month</p>
+                    <p>Company: Technology and engineering consulting for government agencies, NGOs, and Fortune 500 clients</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Business Agreement</div>
+                    <h3>Delphi Education Hub</h3>
+                    <p>Agreed to join as Marketing & Growth Lead</p>
+                    <p>Salary: ₦300,000/month</p>
+                    <p>Focus: Online education for underserved niches in Nigeria and diaspora</p>
+                    <p>Remote position compatible with N28 role</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Technical Achievement</div>
+                    <h3>₦17.6M Phantom Balance Correction</h3>
+                    <p>Identified and corrected phantom balance in AutoRent ledger</p>
+                    <p>Caused by ledger drift from legacy refunds that never wrote reversal entries</p>
+                    <p>Reconciliation made permanent through code changes</p>
+                    <p>Demonstrates strong attention to detail and systems thinking</p>
+                </div>
+
+                <div class="achievement-card">
+                    <div class="badge">Entrepreneurial Spirit</div>
+                    <h3>Early Started</h3>
+                    <p>Started selling at age 12 in mother's catering business</p>
+                    <p>Built first paid website at age 13 entirely on phone</p>
+                    <p>Self-taught engineer since age 8</p>
+                    <p>Second-in-command on sales team of six adults at young age</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="timeline" class="section">
+            <h2 class="section-title">Career Timeline</h2>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-date">Age 8</div>
+                    <div class="timeline-content">
+                        <h3>Started Coding</h3>
+                        <p>Began teaching myself to code at age 8, laying the foundation for my technical journey.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Age 12</div>
+                    <div class="timeline-content">
+                        <h3>Started Selling</h3>
+                        <p>Began selling in my mother's catering, restaurant, and events business (Homemade Yummy Services), developing early business acumen.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Age 13</div>
+                    <div class="timeline-content">
+                        <h3>First Paid Website</h3>
+                        <p>Built my first paid website entirely on my phone using HTML, CSS, and JavaScript - a accomplishment I'm particularly proud of.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">2019</div>
+                    <div class="timeline-content">
+                        <h3>6+ Years Sales/BD Experience</h3>
+                        <p>Accumulated defensible 6+ years of sales and business development experience starting from 2019.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Sept 2024</div>
+                    <div class="timeline-content">
+                        <h3>Product Management Start</h3>
+                        <p>Began product management journey around September 2024, building on my technical foundation.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Jan 2026</div>
+                    <div class="timeline-content">
+                        <h3>NEPAWatch Launch</h3>
+                        <p>Launched NEPAWatch, the power outage tracking app that has since gained 1,500+ users across all 36 Nigerian states plus FCT.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Aug 2026</div>
+                    <div class="timeline-content">
+                        <h3>Hackathon Success</h3>
+                        <p>Won first place at Nithub × BMONI Innovation Fair Hackathon with Kudi, earning ₦166,000 (share of ₦500,000 prize).</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Aug 2026</div>
+                    <div class="timeline-content">
+                        <h3>Award Nominations</h3>
+                        <p>Nominated three times for ULES Awards 2026: Rookie of the Year, Innovation Award, and Startup Visionary for NEPAWatch.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Aug 2026</div>
+                    <div class="timeline-content">
+                        <h3>Grant Application</h3>
+                        <p>Submitted application for Fembol Student Innovation Grant 2.0 with NEPAWatch as the project.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Sep 2026</div>
+                    <div class="timeline-content">
+                        <h3>Professional Roles Start</h3>
+                        <p>Beginning roles at N28 Consulting (Tech Officer) and Delphi Education Hub (Growth Lead) while maintaining focus on personal ventures.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Jan 2027</div>
+                    <div class="timeline-content">
+                        <h3>Debt-Free Target</h3>
+                        <p>Target date to become debt-free through strategic allocation of income from N28 and Delphi roles.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">2027-2028</div>
+                    <div class="timeline-content">
+                        <h3>Blu Tech Learn B2B Pivot</h3>
+                        <p>Planned pivot of Blu Tech Learn to B2B corporate training and bootcamp-to-job placement model, funded by founder contributions to hire a B2B sales specialist.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">2030</div>
+                    <div class="timeline-content">
+                        <h3>Expected Graduation</h3>
+                        <p>Expected to complete B.Sc. Petroleum & Gas Engineering at UNILAG around 2030.</p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-date">Age 30 Goal</h3>
+                    <div class="timeline-content">
+                        <h3>Angel Investor Aspiration</h3>
+                        <p>Goal to be writing angel cheques into other young African founders out of my own money by age 30, not through LP-backed funds.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="section">
+            <h2 class="section-title">Get In Touch</h2>
+            <p>I'm always interested in connecting with fellow technologists, potential collaborators, or those interested in my work. Please feel free to reach out through any of the following channels:</p>
+
+            <div class="contact-form">
+                <div>
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" placeholder="Your name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" placeholder="your.email@example.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="subject">Subject</label>
+                        <input type="text" id="subject" name="subject" placeholder="How can I help you?" required>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="form-group">
+                        <label for="message">Message</label>
+                        <textarea id="message" name="message" placeholder="Your message here..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Send Message</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="social-links">
+                <a href="#" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                <a href="#" title="Email"><i class="fas fa-envelope"></i></a>
+                <a href="#" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                <a href="#" title="Twitter/X"><i class="fab fa-twitter"></i></a>
+                <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            </div>
+
+            <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 0.9rem;">
+                Note: I maintain restricted LinkedIn access due to verification requirements, but I'm active on WhatsApp, email, and other platforms.
+            </p>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 Usifoh Joshua. All rights reserved.</p>
+        <p>Built with passion in Lagos, Nigeria</p>
+    </footer>
+
+    <script>
+        // Simple form submission handler (in a real app, this would connect to a backend)
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('.contact-form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    // In a real implementation, this would send data to a server
+                    alert('Thank you for your message! I will get back to you soon.');
+                    form.reset();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

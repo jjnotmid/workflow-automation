@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# wa-voice — desktop voice assistant wired into the whole workflow system.
+#
+# Speak → whisper transcribes → Claude runs it with every wa-* tool available
+# → the answer is spoken back. Because it runs Claude inside the workflow
+# directory, anything you can ask in a session you can ask out loud: edit a
+# video, send an email, check GitHub, run the daily brief.
+#
+#   wa-voice ask                 one exchange: listen, act, speak
+#   wa-voice listen              continuous — keeps taking turns until Ctrl-C
+#   wa-voice text "..."          same pipeline, typed instead of spoken
+#   wa-voice say "..."           just speak something
+#   wa-voice devices             list microphones
+#   wa-voice test                record 3s and play it back
+#
+# Tier: defaults to your Anthropic SUBSCRIPTION, not the free tier. Tested:
+# free models answer questions fine but are unreliable at actually driving
+# tools — one claimed "screenshot saved" without running anything. Since the
+# subscription is already paid for, it's the sensible default for a assistant
+# whose whole point is taking actions.
+#   WA_VOICE_TIER=free  free models — fine for pure Q&A, flaky for actions
+#   WA_VOICE_TIER=ar    AgentRouter opus-5 — spends real money
+#
+# Recording auto-stops after ~1.8s of silence, so you just talk and pause.
+
+set -uo pipefail
+
+WA="${WA_DIR:-$HOME/Workflow Automation}"
+MODEL="${WHISPER_MODEL:-$WA/models/ggml-base.en.bin}"
+VOICE="${WA_VOICE_NAME:-Samantha}"
+TIER="${WA_VOICE_TIER:-sub}"
+STATE="$WA/.voice"
+mkdir -p "$STATE"
+
+die() { echo "$*" >&2; exit 1; }
+command -v rec  >/dev/null || die "sox not installed (brew install sox)"
+command -v whisper-cli >/dev/null || die "whisper-cpp not installed"
+[ -f "$MODEL" ] || die "whisper model missing: $MODEL"
+
+speak() {
+  # Strip markdown so the TTS doesn't read out asterisks and backticks.
+  printf '%s' "$1" \
+    | sed -E 's/`+//g; s/\*+//g; s/^#+ //g; s/\[([^]]*)\]\([^)]*\)/\1/g' \
+    | say -v "$VOICE" -r "${WA_VOICE_RATE:-190}"
+}
+
+listen_once() {
+  local wav="$STATE/utterance.wav"
+  rm -f "$wav"
+  # silence 1 0.1 2%  = wait for speech to begin
+  #         1 1.8 2%  = stop after 1.8s below 2% volume
+  rec -q -c 1 -r 16000 -b 16 "$wav" \
+      silence 1 0.1 2% 1 1.8 2% trim 0 30 2>/dev/null
+  [ -s "$wav" ] || return 1
+  # Reject sub-half-second blips (a cough, a door) before paying for a transcribe.
+  local dur
+  dur="$(soxi -D "$wav" 2>/dev/null || echo 0)"
+  awk -v d="$dur" 'BEGIN{exit !(d>0.5)}' || return 1
+  echo "$wav"
+}
+
+transcribe() {
+  whisper-cli -m "$MODEL" -f "$1" -nt -np 2>/dev/null \
+    | tr '\n' ' ' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+run_claude() {
+  local prompt="$1"
+  # claude -p is a non-interactive subprocess: it never sources ~/.zshrc, so
+  # without this the wa-* tools are simply not on PATH and the model "succeeds"
+  # by hallucinating instead of failing loudly.
+  export PATH="$WA/bin:/usr/local/bin:$PATH"
+  export WA_DIR="$WA"
+
+  # Broad allowlist, matching the WhatsApp bot and web UI. Joshua asked for
+  # everything pre-approved so nothing stalls on a prompt he cannot see.
+  local -a ALLOW=(
+    "Bash" "Read" "Write" "Edit" "Glob" "Grep" "WebFetch" "WebSearch"
+    "Task" "TodoWrite" "NotebookEdit"
+  )
+  # Escalation: subscription -> free ($0) -> AgentRouter (paid, last resort).
+  # Retries once on the next tier if the current one reports exhausted quota.
+  local out
+  out="$(_run_tier "$TIER" "$prompt")"
+  if echo "$out" | grep -qiE "usage limit|rate.?limit|quota|exceeded your|402|429"; then
+    case "$TIER" in
+      sub)  echo "[tier: subscription exhausted -> free]" >&2; out="$(_run_tier free "$prompt")" ;;
+      free) echo "[tier: free exhausted -> agentrouter]" >&2; out="$(_run_tier ar "$prompt")" ;;
+    esac
+  fi
+  # stderr is captured so quota errors can be detected, but Claude's benign
+  # notices must not be read aloud as if they were the answer.
+  printf '%s' "$out" | grep -vE \
+    "^Ignoring [0-9]+ permissions|connectors are disabled|no stdin data received|^Warning:" \
+    | sed -E '/^[[:space:]]*$/d'
+}
+
+_run_tier() {
+  local TIER="$1" prompt="$2"
+  local -a ALLOW=(
+    "Bash" "Read" "Write" "Edit" "Glob" "Grep" "WebFetch" "WebSearch"
+    "Task" "TodoWrite" "NotebookEdit"
+  )
+  case "$TIER" in
+    free)
+      curl -sf "http://127.0.0.1:${FREE_PROXY_PORT:-8787}/health" -o /dev/null --max-time 4 \
+        || ( cd "$WA/router" && nohup python3 free_proxy.py > /tmp/free_proxy.log 2>&1 & sleep 2 )
+      ( cd "$WA" && ANTHROPIC_BASE_URL="http://127.0.0.1:${FREE_PROXY_PORT:-8787}" \
+        ANTHROPIC_AUTH_TOKEN=free-proxy ANTHROPIC_API_KEY=free-proxy \
+        ANTHROPIC_MODEL="claude-sonnet-4-5-20250929" \
+        ANTHROPIC_SMALL_FAST_MODEL="claude-3-5-haiku-20241022" \
+        claude -p "$prompt" --allowedTools "${ALLOW[@]}" 2>&1 )
+      ;;
+    ar)
+      # shellcheck source=/dev/null
+      source "$WA/router/credentials.env"
+      ( cd "$WA" && ANTHROPIC_BASE_URL="$AGENTROUTER_BASE_URL" \
+        ANTHROPIC_AUTH_TOKEN="$AGENTROUTER_API_KEY" ANTHROPIC_API_KEY="$AGENTROUTER_API_KEY" \
+        ANTHROPIC_MODEL="claude-opus-5" ANTHROPIC_SMALL_FAST_MODEL="claude-opus-4-8" \
+        claude -p "$prompt" --allowedTools "${ALLOW[@]}" 2>&1 )
+      ;;
+    *)
+      ( cd "$WA" && claude -p "$prompt" --allowedTools "${ALLOW[@]}" 2>&1 )
+      ;;
+  esac
+}
+
+handle() {
+  local said="$1"
+  [ -n "$said" ] || return 1
+
+  # Whisper annotates non-speech audio in brackets or parentheses —
+  # "(machine whirring)", "[BLANK_AUDIO]", "(crickets chirping)". If the whole
+  # transcript is one such annotation, nobody actually said anything.
+  local lower
+  lower="$(echo "$said" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+  if [[ "$lower" =~ ^\(.*\)$ ]] || [[ "$lower" =~ ^\[.*\]$ ]]; then
+    echo "(non-speech: $said)"
+    return 1
+  fi
+  # Whisper's known hallucinations on near-silence.
+  case "$lower" in
+    ""|"you"|"thank you."|"thanks for watching!"|"bye."|"."|"...") return 1 ;;
+  esac
+  # Anything under 3 characters isn't a request.
+  [ "${#lower}" -ge 3 ] || return 1
+
+  echo "You: $said"
+  echo "$(date '+%F %T')  USER: $said" >> "$STATE/history.log"
+
+  local reply
+  local memory=""
+  [ -f "$WA/MEMORY.md" ] && memory="$(cat "$WA/MEMORY.md")"
+
+  reply="$(run_claude "You are Joshua's spoken desktop assistant. He said: \"$said\"
+
+What you already know about him:
+$memory
+
+Act on it using the tools in this workflow directory (wa-video, wa-email,
+wa-screen, wa-daily, wa-agent, wa-social, gh, ruflo). Read CAPABILITIES.md if
+you need to know what's available.
+
+Your reply is going to be READ ALOUD by a speech synthesizer. So:
+- Answer in at most 3 short sentences, plain spoken English.
+- No markdown, no bullet points, no code blocks, no file paths unless asked.
+- If you performed an action, say what you did in one sentence.
+- If the request is ambiguous, ask one short clarifying question.")"
+
+  if [ -z "$reply" ]; then
+    reply="Sorry, I couldn't get an answer that time."
+  fi
+
+  echo "Assistant: $reply"
+  echo "$(date '+%F %T')  ASSISTANT: $reply" >> "$STATE/history.log"
+  speak "$reply"
+}
+
+case "${1:-}" in
+  devices)
+    "$(ls -d /usr/local/Cellar/ffmpeg-full/*/bin/ffmpeg 2>/dev/null | tail -1)" \
+      -hide_banner -f avfoundation -list_devices true -i "" 2>&1 | grep -A5 "audio devices"
+    ;;
+
+  test)
+    echo "recording 3 seconds…"
+    rec -q -c 1 -r 16000 -b 16 "$STATE/test.wav" trim 0 3 2>/dev/null
+    echo "playing back…"
+    play -q "$STATE/test.wav" 2>/dev/null
+    echo "transcript: $(transcribe "$STATE/test.wav")"
+    ;;
+
+  say)   speak "${2:-nothing to say}" ;;
+
+  text)  handle "${2:-}" ;;
+
+  ask)
+    echo "Listening — speak, then pause."
+    wav="$(listen_once)" || { echo "heard nothing"; exit 0; }
+    said="$(transcribe "$wav")"
+    handle "$said" || echo "heard nothing usable"
+    ;;
+
+  listen)
+    echo "Continuous mode on tier '$TIER'. Ctrl-C to stop."
+    speak "Listening."
+    while true; do
+      wav="$(listen_once)" || continue
+      said="$(transcribe "$wav")"
+      # Spoken exits, so you never have to reach for the keyboard.
+      case "$(echo "$said" | tr '[:upper:]' '[:lower:]')" in
+        *"stop listening"*|*"goodbye"*|*"that's all"*)
+          speak "Stopping."; exit 0 ;;
+      esac
+      handle "$said" || true
+    done
+    ;;
+
+  *)
+    sed -n '2,22p' "$0" | sed 's/^# //; s/^#$//'
+    exit 1
+    ;;
+esac

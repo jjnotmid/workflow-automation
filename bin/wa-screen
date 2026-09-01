@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# wa-screen — see and control the Mac: screenshots, clicks, typing, app control.
+#
+# Works in every session tier (plain bash), so screen control survives a
+# provider failover the same way email does.
+#
+#   wa-screen shot [path]            capture screen -> PNG (I can read it)
+#   wa-screen shot-window            capture the frontmost window only
+#   wa-screen click X Y              click at coordinates
+#   wa-screen type "text"            type text into the focused field
+#   wa-screen key <keystroke>        send a key (e.g. return, tab, cmd+t)
+#   wa-screen move X Y               move cursor
+#   wa-screen where                  print current cursor position
+#   wa-screen apps                   list running apps
+#   wa-screen focus "App Name"       bring an app to the front
+#   wa-screen size                   screen dimensions
+#
+# Requires cliclick for input control:  brew install cliclick
+# Screenshots work without it.
+#
+# macOS will prompt once for Screen Recording and Accessibility permissions.
+# Grant them to your terminal app or nothing here can drive the UI.
+
+set -euo pipefail
+
+CLICLICK="$(command -v cliclick || echo /usr/local/bin/cliclick)"
+SHOTS_DIR="${WA_DIR:-$HOME/Workflow Automation}/.screenshots"
+
+need_cliclick() {
+  [ -x "$CLICLICK" ] || {
+    echo "cliclick not installed. Run: brew install cliclick" >&2
+    exit 1
+  }
+}
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  shot)
+    mkdir -p "$SHOTS_DIR"
+    out="${1:-$SHOTS_DIR/shot-$(date +%Y%m%d-%H%M%S).png}"
+    screencapture -x "$out"
+    echo "$out"
+    ;;
+
+  shot-window)
+    mkdir -p "$SHOTS_DIR"
+    out="${1:-$SHOTS_DIR/win-$(date +%Y%m%d-%H%M%S).png}"
+    # -o omits window shadow, -W lets the frontmost window be targeted
+    screencapture -x -o -W "$out"
+    echo "$out"
+    ;;
+
+  click)   need_cliclick; "$CLICLICK" "c:${1},${2}"; echo "clicked ${1},${2}" ;;
+  dblclick) need_cliclick; "$CLICLICK" "dc:${1},${2}"; echo "double-clicked ${1},${2}" ;;
+  move)    need_cliclick; "$CLICLICK" "m:${1},${2}"; echo "moved to ${1},${2}" ;;
+  where)   need_cliclick; "$CLICLICK" p ;;
+  type)    need_cliclick; "$CLICLICK" -w 20 "t:${1}"; echo "typed ${#1} chars" ;;
+  key)     need_cliclick; "$CLICLICK" "kp:${1}"; echo "sent key ${1}" ;;
+
+  size)
+    osascript -e 'tell application "Finder" to get bounds of window of desktop'
+    ;;
+
+  apps)
+    osascript -e 'tell application "System Events" to get name of every process whose background only is false'
+    ;;
+
+  focus)
+    osascript -e "tell application \"${1}\" to activate"
+    echo "focused ${1}"
+    ;;
+
+  *)
+    sed -n '2,25p' "$0" | sed 's/^# //; s/^#$//'
+    exit 1
+    ;;
+esac

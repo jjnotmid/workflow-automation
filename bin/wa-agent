@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""
+wa-agent — index and route across the 293 agency-agents personas.
+
+The agency-agents repo is a library of specialist system prompts. This makes
+them findable and usable: search by keyword, print one to load as context, or
+let `route` pick the best match for a task description.
+
+  wa-agent index                rebuild the index (run after updating vendor/)
+  wa-agent list [division]      list agents, optionally by division
+  wa-agent divisions            list divisions with counts
+  wa-agent search <terms...>    keyword search across name + description
+  wa-agent show <name>          print an agent's full prompt
+  wa-agent route <task...>      best matches for a task description
+"""
+
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+WA = Path(os.environ.get("WA_DIR", Path.home() / "Workflow Automation"))
+SRC = WA / "vendor" / "agency-agents"
+INDEX = WA / ".router-state" / "agents-index.json"
+
+SKIP = {"README.md", "CONTRIBUTING.md", "CONTRIBUTING_zh-CN.md", "SECURITY.md"}
+
+# Words too common across agent descriptions to carry signal when routing.
+STOP = {
+    "the", "and", "for", "with", "that", "this", "you", "your", "are", "from",
+    "have", "who", "какой", "a", "an", "of", "to", "in", "on", "is", "it",
+    "agent", "specialist", "expert", "across", "full", "every", "into",
+}
+
+
+def parse_frontmatter(path):
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    if not text.startswith("---"):
+        return None
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None
+    fm = text[3:end]
+
+    def field(key):
+        m = re.search(rf"^{key}:\s*(.+?)$", fm, re.M)
+        if not m:
+            return ""
+        return m.group(1).strip().strip('"').strip("'")
+
+    return {
+        "name": field("name") or path.stem,
+        "description": field("description"),
+        "emoji": field("emoji"),
+        "vibe": field("vibe"),
+        "slug": path.stem,
+        "division": path.parent.name,
+        "path": str(path),
+    }
+
+
+def build_index():
+    if not SRC.exists():
+        sys.exit(f"agency-agents not found at {SRC} — clone it first")
+    agents = []
+    for p in sorted(SRC.rglob("*.md")):
+        if p.name in SKIP or ".git" in p.parts:
+            continue
+        a = parse_frontmatter(p)
+        if a and a["description"]:
+            agents.append(a)
+    INDEX.parent.mkdir(parents=True, exist_ok=True)
+    INDEX.write_text(json.dumps(agents, indent=1))
+    return agents
+
+
+def load():
+    if not INDEX.exists():
+        return build_index()
+    return json.loads(INDEX.read_text())
+
+
+def tokens(s):
+    return {w for w in re.findall(r"[a-z0-9]+", s.lower()) if w not in STOP and len(w) > 2}
+
+
+def score(agent, terms):
+    """Name matches weigh heavier than description matches — a task naming
+    'video editing' should surface the editing coach, not every agent whose
+    description happens to mention video."""
+    name_t = tokens(agent["name"] + " " + agent["slug"])
+    desc_t = tokens(agent["description"] + " " + agent.get("vibe", ""))
+    return 3 * len(terms & name_t) + len(terms & desc_t)
+
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else "help"
+    rest = args[1:]
+
+    if cmd == "index":
+        a = build_index()
+        print(f"indexed {len(a)} agents -> {INDEX}")
+        return
+
+    if cmd == "help":
+        print(__doc__.strip())
+        return
+
+    agents = load()
+
+    if cmd == "divisions":
+        counts = {}
+        for a in agents:
+            counts[a["division"]] = counts.get(a["division"], 0) + 1
+        for d, n in sorted(counts.items(), key=lambda x: -x[1]):
+            print(f"{d:<22} {n}")
+        print(f"\n{len(agents)} agents in {len(counts)} divisions")
+
+    elif cmd == "list":
+        div = rest[0] if rest else None
+        for a in agents:
+            if div and a["division"] != div:
+                continue
+            print(f"{a['emoji'] or '•'} {a['slug']:<48} [{a['division']}]")
+
+    elif cmd in ("search", "route"):
+        if not rest:
+            sys.exit(f"usage: wa-agent {cmd} <terms...>")
+        terms = tokens(" ".join(rest))
+        ranked = sorted(
+            ((score(a, terms), a) for a in agents), key=lambda x: -x[0]
+        )
+        hits = [(s, a) for s, a in ranked if s > 0][:8]
+        if not hits:
+            print("no matches")
+            return
+        for s, a in hits:
+            print(f"\n[{s}] {a['emoji']} {a['slug']}  ({a['division']})")
+            print(f"    {a['description'][:180]}")
+        if cmd == "route":
+            print(f"\n→ best: {hits[0][1]['slug']}")
+            print(f"  load with: wa-agent show {hits[0][1]['slug']}")
+
+    elif cmd == "show":
+        if not rest:
+            sys.exit("usage: wa-agent show <slug>")
+        for a in agents:
+            if a["slug"] == rest[0] or a["name"] == rest[0]:
+                print(Path(a["path"]).read_text(encoding="utf-8", errors="replace"))
+                return
+        sys.exit(f"no agent named {rest[0]}")
+
+    else:
+        print(__doc__.strip())
+
+
+if __name__ == "__main__":
+    main()

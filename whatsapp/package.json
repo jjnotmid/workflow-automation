@@ -1,0 +1,17 @@
+{
+  "name": "wa-whatsapp-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp command center — voice notes, text, docs and images routed into the local workflow system",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "pair": "node bot.js --pair"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "qrcode-terminal": "^0.12.0",
+    "pino": "^9.5.0"
+  }
+}
