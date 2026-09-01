@@ -87,6 +87,20 @@ Known limits found in testing: workflow files must be **JSON, not YAML**, and
 `ruflo workflow run -f` collapses multi-step files into one "Execute" stage
 rather than running each step as its own agent.
 
+### Project state
+`projects/<name>/state.md` — goal, status, next action, open questions, log.
+Named projects: `blu-tech-learn`, `nepawatch`, `content`. Before doing
+substantial work on one of these, read its state file. After finishing
+something worth remembering, append a dated line to its Log — don't let
+agent output evaporate into a scrollback.
+
+### Scheduled jobs (`wa-schedule`)
+Two jobs run via launchd, unattended:
+- `daily` — 07:30, morning brief to `journal/`
+- `evening-capture` — 21:00, `wa-daily save` (journal + ruflo memory)
+
+Check with `wa-schedule list`, logs at `.logs/<name>.log`.
+
 ---
 
 ## Health
