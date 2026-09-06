@@ -128,6 +128,7 @@ n=$(python3 -c "import json;print(len(json.load(open('$WA/.router-state/agents-i
 [ -n "$n" ] && pass "$n specialist agents indexed" || warn "run: wa-agent index"
 command -v ruflo >/dev/null && pass "ruflo $(ruflo --version 2>/dev/null | head -1 | awk '{print $2}')" || fail "ruflo missing"
 [ -f "$WA/workflows/daily.json" ] && pass "daily workflow defined" || warn "no daily workflow"
+[ -f "$WA/workflows/journey-sim/harness.ts" ] && pass "journey simulator available (wa-simulate)" || warn "journey simulator missing"
 
 head_ "macOS permissions"
 # screencapture silently refuses dotfile destinations, so use a normal name.

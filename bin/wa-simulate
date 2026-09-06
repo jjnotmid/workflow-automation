@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""
+wa-simulate — drive a project through the journeys real people take.
+
+Stub the unreliable part of a system (an LLM, a catch-all handler, a generic
+error path) with one recognisable string, then treat any journey that reaches
+it as a failure. What is left is the real coverage gap, and it is always
+bigger than it feels. Built out of the Kudi QA pass, where this method found
+14 reproducible bugs in an afternoon, 3 of which had already been reported as
+"the AI is bad" and were nothing of the kind.
+
+  wa-simulate init [dir]        add the harness to a project
+  wa-simulate run [dir]         run its journeys and sweeps
+  wa-simulate sweep [dir] FILE  run a phrasing matrix from a JSON file
+  wa-simulate status [dir]      what is wired up here
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+WA = Path(os.environ.get("WA_DIR", Path.home() / "Workflow Automation"))
+SRC = WA / "workflows" / "journey-sim"
+
+BOLD, DIM, GREEN, RED, YELLOW, RESET = "\033[1m", "\033[2m", "\033[32m", "\033[31m", "\033[33m", "\033[0m"
+
+
+def say(msg, colour=""):
+    print(f"{colour}{msg}{RESET}")
+
+
+def die(msg):
+    say(f"✗ {msg}", RED)
+    sys.exit(1)
+
+
+def project_root(args):
+    """The directory to work in, defaulting to the working directory."""
+    d = Path(args[0]).resolve() if args and not args[0].startswith("-") else Path.cwd()
+    if not d.is_dir():
+        die(f"not a directory: {d}")
+    return d
+
+
+def detect(root: Path):
+    """What this project already uses, so we fit in rather than impose."""
+    pkg_path = root / "package.json"
+    pkg = {}
+    if pkg_path.exists():
+        try:
+            pkg = json.loads(pkg_path.read_text())
+        except json.JSONDecodeError:
+            pass
+
+    deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+    runner = next((r for r in ("vitest", "jest") if r in deps), None)
+    if not runner and any((root / c).exists() for c in ("vitest.config.ts", "vitest.config.js")):
+        runner = "vitest"
+
+    # Where tests already live, so the harness lands somewhere familiar.
+    for candidate in ("src/lib", "src", "tests", "test", "lib"):
+        if (root / candidate).is_dir():
+            home = root / candidate / "__simulation__"
+            break
+    else:
+        home = root / "simulation"
+
+    return {
+        "pkg": pkg,
+        "pkg_path": pkg_path,
+        "runner": runner,
+        "typescript": (root / "tsconfig.json").exists(),
+        "home": home,
+        "installed": (home / "harness.ts").exists(),
+    }
+
+
+# ── init ───────────────────────────────────────────────────────────────
+
+
+def cmd_init(args):
+    root = project_root(args)
+    info = detect(root)
+    home = info["home"]
+    home.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(SRC / "harness.ts", home / "harness.ts")
+    say(f"✓ harness    {home.relative_to(root)}/harness.ts", GREEN)
+
+    journeys = home / "journeys.ts"
+    if journeys.exists():
+        say(f"· journeys   {journeys.relative_to(root)} already exists, left alone", DIM)
+    else:
+        template = (SRC / "journeys.template.ts").read_text()
+        journeys.write_text(template.replace("__PROJECT__", root.name))
+        say(f"✓ journeys   {journeys.relative_to(root)}", GREEN)
+
+    if info["pkg_path"].exists():
+        pkg = info["pkg"]
+        scripts = pkg.setdefault("scripts", {})
+        rel = journeys.relative_to(root)
+        if info["runner"] == "vitest":
+            cmd = f"vitest run {rel}"
+        elif info["runner"] == "jest":
+            cmd = f"jest {rel}"
+        else:
+            cmd = f"node --experimental-strip-types {rel}"
+        if scripts.get("simulate") != cmd:
+            scripts["simulate"] = cmd
+            info["pkg_path"].write_text(json.dumps(pkg, indent=2) + "\n")
+            say(f"✓ npm script npm run simulate  ({cmd})", GREEN)
+
+    runner = info["runner"] or "no test runner detected, will run it with node"
+    say(f"\n{BOLD}Runner:{RESET} {runner}")
+    print()
+    say("Three things to wire up, all marked WIRE in journeys.ts:", BOLD)
+    print("  1. stub the unreliable dependency so it returns FALLBACK")
+    print("  2. setup()  build one isolated user or session")
+    print("  3. drive()  push one input through the real system")
+    print()
+    say("Then: wa-simulate run", DIM)
+    say("Or ask Claude: \"wire up the journey simulator for this project\"", DIM)
+
+
+# ── run ────────────────────────────────────────────────────────────────
+
+
+def cmd_run(args):
+    root = project_root(args)
+    info = detect(root)
+    if not info["installed"]:
+        die(f"nothing wired up here yet. Run: wa-simulate init {root}")
+
+    scripts = info["pkg"].get("scripts", {})
+    if "simulate" in scripts:
+        cmd = ["npm", "run", "--silent", "simulate"]
+    else:
+        rel = info["home"].relative_to(root) / "journeys.ts"
+        cmd = ["node", "--experimental-strip-types", str(rel)]
+
+    say(f"{DIM}$ {' '.join(cmd)}{RESET}")
+    print()
+    # Flush first, or Python's buffered output lands after the subprocess's
+    # and the command line prints below the results it produced.
+    sys.stdout.flush()
+    sys.exit(subprocess.call(cmd, cwd=root))
+
+
+# ── sweep ──────────────────────────────────────────────────────────────
+
+SWEEP_RUNNER = """
+import {{ readFileSync }} from "node:fs";
+import {{ formatSweep }} from "{home}/harness";
+import {{ sim }} from "{home}/journeys";
+
+const groups = JSON.parse(readFileSync({spec!r}, "utf8"));
+const result = await sim.sweep(groups);
+console.log(formatSweep(result));
+process.exit(result.ok ? 0 : 1);
+"""
+
+
+def cmd_sweep(args):
+    if not args:
+        die("give me a JSON file of phrasings. See: wa-simulate status")
+    spec = Path(args[-1]).resolve()
+    root = project_root(args[:-1])
+    info = detect(root)
+    if not spec.exists():
+        die(f"no such file: {spec}")
+    if not info["installed"]:
+        die(f"nothing wired up here yet. Run: wa-simulate init {root}")
+
+    # journeys.ts has to export `sim` for this to work; say so plainly
+    # rather than failing with a module error nobody can read.
+    if "export const sim" not in (info["home"] / "journeys.ts").read_text():
+        die("journeys.ts must `export const sim = createSimulator(...)` for sweeps to run")
+
+    tmp = root / ".wa-sweep.mts"
+    tmp.write_text(SWEEP_RUNNER.format(home=info["home"].relative_to(root).as_posix(), spec=str(spec)))
+    sys.stdout.flush()
+    try:
+        code = subprocess.call(["npx", "tsx", str(tmp.name)], cwd=root)
+    finally:
+        tmp.unlink(missing_ok=True)
+    sys.exit(code)
+
+
+# ── status ─────────────────────────────────────────────────────────────
+
+EXAMPLE_SWEEP = {
+    "balance": ["how much do i have", "what is my balance", "check account balance"],
+    "questionsAboutIt": {
+        "inputs": ["what does it cost", "what is my limit"],
+        "mustNot": "How much you wan send",
+    },
+}
+
+
+def cmd_status(args):
+    root = project_root(args)
+    info = detect(root)
+    say(f"{BOLD}{root.name}{RESET}  {DIM}{root}{RESET}\n")
+
+    rows = [
+        ("harness", "installed" if info["installed"] else "not installed", info["installed"]),
+        ("location", str(info["home"].relative_to(root)) if info["installed"] else "-", info["installed"]),
+        ("runner", info["runner"] or "none detected", bool(info["runner"])),
+        ("typescript", "yes" if info["typescript"] else "no", info["typescript"]),
+        ("npm script", "npm run simulate" if "simulate" in info["pkg"].get("scripts", {}) else "-",
+         "simulate" in info["pkg"].get("scripts", {})),
+    ]
+    for label, value, good in rows:
+        mark = f"{GREEN}✓{RESET}" if good else f"{YELLOW}·{RESET}"
+        print(f"  {mark} {label:<12} {value}")
+
+    if not info["installed"]:
+        print()
+        say(f"  Add it with: wa-simulate init {root.name}", DIM)
+        return
+
+    print()
+    say("  A sweep file looks like this:", DIM)
+    for line in json.dumps(EXAMPLE_SWEEP, indent=2).splitlines():
+        print(f"  {DIM}{line}{RESET}")
+
+
+# ── dispatch ───────────────────────────────────────────────────────────
+
+COMMANDS = {"init": cmd_init, "run": cmd_run, "sweep": cmd_sweep, "status": cmd_status}
+
+
+def main():
+    if not SRC.exists():
+        die(f"harness source missing at {SRC}")
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    fn = COMMANDS.get(args[0])
+    if not fn:
+        die(f"unknown command '{args[0]}'. One of: {', '.join(COMMANDS)}")
+    fn(args[1:])
+
+
+if __name__ == "__main__":
+    main()

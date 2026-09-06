@@ -61,6 +61,27 @@ clearly asked for it to go out.** Accounts: iCloud, Google, jjnotmid47@gmail.com
 Needs Screen Recording + Accessibility granted to the terminal. Prefer the CLI
 or an API over driving a GUI whenever both exist — UI automation is brittle.
 
+### QA and journey simulation (`wa-simulate`)
+| Trigger | Tool |
+|---|---|
+| "QA this", "test it end to end", "run through the whole thing" | `wa-simulate init` then `run` |
+| "simulate users", "act like a real person using it" | same |
+| "why does it keep doing X", "the AI is bad at Y", "it feels broken" | same, then sweep the phrasings |
+| before a demo, pitch or release | same |
+
+Stubs whatever the system falls back on (an LLM, a catch-all route, a generic
+error) with one recognisable marker, then treats any journey that reaches it as
+a failure. Two failure classes come out: **fell through** (no real handler, so
+it only works when the model guesses right) and **wrong handler** (a confident
+answer from the wrong feature, which is worse because the user acts on it).
+
+Found 14 reproducible bugs in Kudi in an afternoon, 3 of which had been
+reported as "the AI is bad" and were nothing of the kind.
+
+Read `.claude/skills/journey-simulation/SKILL.md` before wiring it up: the
+sweep checklist there is the part that actually finds things. Not a substitute
+for browser testing a rendered UI, use the `browser` skill for that.
+
 ### GitHub
 `gh` is authenticated as **jjnotmid** (`repo`, `gist`, `read:org`). Use it
 directly for issues, PRs, repos, gists. No MCP needed, works in every tier.
