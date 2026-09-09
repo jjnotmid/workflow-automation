@@ -31,7 +31,10 @@ const FALLBACK = "[[FELL-THROUGH]]";
 
 // import { handleMessage } from "../src/...";
 
-const sim = createSimulator<{ id: string; sent: string[] }>({
+// Exported, because `wa-simulate sweep` imports it. Without the export the
+// sweep command dies immediately after init, which is the first thing anybody
+// tries.
+export const sim = createSimulator<{ id: string; sent: string[] }>({
   fallback: FALLBACK,
 
   // ── WIRE 2: one isolated world per session ──────────────────────────

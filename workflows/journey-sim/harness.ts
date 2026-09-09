@@ -151,8 +151,15 @@ export function createSimulator<Ctx>(config: SimulatorConfig<Ctx>) {
       turns,
       async say(input: string): Promise<Turn> {
         const outputs = [...(await config.drive(ctx, input))];
-        const text = strip(outputs.join("\n"));
-        const turn: Turn = { input, outputs, text, fellThrough: text.includes(config.fallback) };
+        const raw = outputs.join("\n");
+        const text = strip(raw);
+        // Looked for in the RAW output, not the normalised text. The default
+        // normaliser strips <...> tags, so a marker like <FALLBACK> or <STUB>
+        // was deleted before this check ever saw it: every fallen-through
+        // turn reported clean and the suite went green while every input had
+        // reached the stub. That is the exact failure this harness exists to
+        // catch, so the check must not depend on how output is tidied.
+        const turn: Turn = { input, outputs, text, fellThrough: raw.includes(config.fallback) };
         turns.push(turn);
         return turn;
       },
@@ -180,6 +187,11 @@ export function createSimulator<Ctx>(config: SimulatorConfig<Ctx>) {
   async function journey(name: string, steps: readonly Step<Ctx>[]): Promise<JourneyResult> {
     const s = await session();
     const failures: Failure[] = [];
+    // Everything below runs inside try/finally so config.teardown always
+    // gets its turn. Without it, one throw from drive() left that session's
+    // temp directory, database row or container behind, and a CI run of many
+    // journeys accumulated orphans until the host ran out of something.
+    try {
 
     for (const [i, step] of steps.entries()) {
       const turn = await s.say(step.say);
@@ -204,8 +216,10 @@ export function createSimulator<Ctx>(config: SimulatorConfig<Ctx>) {
       }
     }
 
-    await s.close();
     return { name, turns: s.turns, failures, ok: failures.length === 0 };
+    } finally {
+      await s.close();
+    }
   }
 
   /**
@@ -221,22 +235,32 @@ export function createSimulator<Ctx>(config: SimulatorConfig<Ctx>) {
       const spec: SweepGroup = Array.isArray(raw) ? { inputs: raw } : (raw as SweepGroup);
       for (const input of spec.inputs) {
         const s = await session();
-        const turn = await s.say(input);
-        await s.close();
-        rows.push({
-          group,
-          input,
-          fellThrough: turn.fellThrough,
-          wrongHandler: Boolean(spec.mustNot && spec.mustNot.test(turn.text)),
-          missedWant: Boolean(spec.want && !spec.want.test(turn.text)),
-          reply: turn.text.replace(/\s+/g, " ").trim(),
-        });
+        try {
+          const turn = await s.say(input);
+          rows.push({
+            group,
+            input,
+            fellThrough: turn.fellThrough,
+            wrongHandler: Boolean(spec.mustNot && spec.mustNot.test(turn.text)),
+            missedWant: Boolean(spec.want && !spec.want.test(turn.text)),
+            reply: turn.text.replace(/\s+/g, " ").trim(),
+          });
+        } finally {
+          // Always, so a failure on one phrasing does not strand its session
+          // and take the rest of the sweep down with it.
+          await s.close();
+        }
       }
     }
 
+    // Each row is counted once, in the most specific class that applies.
+    //
+    // These used to overlap: a reply that matched mustNot usually also fails
+    // want, so the same row landed in both lists and the summary arithmetic
+    // went with it, printing things like "3 phrasings, -3 handled, 6 not".
     const fellThrough = rows.filter((r) => r.fellThrough);
-    const wrongHandler = rows.filter((r) => r.wrongHandler);
-    const missedWant = rows.filter((r) => !r.fellThrough && r.missedWant);
+    const wrongHandler = rows.filter((r) => !r.fellThrough && r.wrongHandler);
+    const missedWant = rows.filter((r) => !r.fellThrough && !r.wrongHandler && r.missedWant);
     return {
       rows,
       total: rows.length,
@@ -270,14 +294,21 @@ export function formatSweep(result: SweepResult, opts: { width?: number } = {}):
   }
 
   const bad = result.fellThrough.length + result.wrongHandler.length + result.missedWant.length;
-  out.push(
-    "",
+  // Built with the zero counts dropped HERE, rather than by filtering every
+  // empty line out of the whole document at the end. That filter also ate the
+  // blank lines pushed above to separate the group headings, so every group
+  // ran together into one wall of text and the headings stopped doing their
+  // only job.
+  const summary = [
     `${result.total} phrasings, ${result.total - bad} handled, ${bad} not.`,
-    result.fellThrough.length ? `  ${result.fellThrough.length} fell through to the model` : "",
-    result.wrongHandler.length ? `  ${result.wrongHandler.length} answered by the WRONG handler` : "",
-    result.missedWant.length ? `  ${result.missedWant.length} handled but said the wrong thing` : "",
-  );
-  return out.filter((l) => l !== "").join("\n");
+    result.fellThrough.length ? `  ${result.fellThrough.length} fell through to the model` : null,
+    result.wrongHandler.length ? `  ${result.wrongHandler.length} answered by the WRONG handler` : null,
+    result.missedWant.length ? `  ${result.missedWant.length} handled but said the wrong thing` : null,
+  ].filter((l): l is string => l !== null);
+
+  out.push("", ...summary);
+  // Only the very first line can be a leading blank, from the first group.
+  return out.join("\n").replace(/^\n/, "");
 }
 
 /** Every failure across a set of journeys, ready to paste into a report. */

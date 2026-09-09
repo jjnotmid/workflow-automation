@@ -45,6 +45,23 @@ def project_root(args):
     return d
 
 
+def simulate_command(info, rel) -> str:
+    """How `npm run simulate` should invoke the journeys file.
+
+    Deliberately NOT the project's test runner. init used to write
+    "vitest run journeys.ts" whenever vitest was present, but the generated
+    journeys.ts is a standalone script with no test(), it() or describe() in
+    it, so vitest exited with "No test suite found in file" before a single
+    journey ran. The first thing anybody does after init is run it, and it
+    failed for exactly the projects most likely to try.
+
+    tsx runs the file as what it is. Wrapping main() in a test to gate CI is
+    still worth doing, and journeys.ts says so, but that is the user's choice
+    to make rather than something init breaks on their behalf.
+    """
+    return f"npx tsx {rel}"
+
+
 def detect(root: Path):
     """What this project already uses, so we fit in rather than impose."""
     pkg_path = root / "package.json"
@@ -98,20 +115,22 @@ def cmd_init(args):
         journeys.write_text(template.replace("__PROJECT__", root.name))
         say(f"✓ journeys   {journeys.relative_to(root)}", GREEN)
 
-    if info["pkg_path"].exists():
+    if info["pkg_path"].exists() and info["pkg"]:
+        # info["pkg"] is {} when the file exists but would not parse, and
+        # writing then would replace somebody's dependencies, name and
+        # version with a lone "scripts" block. A temporarily broken
+        # package.json is not a reason to finish breaking it.
         pkg = info["pkg"]
         scripts = pkg.setdefault("scripts", {})
         rel = journeys.relative_to(root)
-        if info["runner"] == "vitest":
-            cmd = f"vitest run {rel}"
-        elif info["runner"] == "jest":
-            cmd = f"jest {rel}"
-        else:
-            cmd = f"node --experimental-strip-types {rel}"
+        cmd = simulate_command(info, rel)
         if scripts.get("simulate") != cmd:
             scripts["simulate"] = cmd
             info["pkg_path"].write_text(json.dumps(pkg, indent=2) + "\n")
             say(f"✓ npm script npm run simulate  ({cmd})", GREEN)
+    elif info["pkg_path"].exists():
+        say("! package.json could not be parsed, so I left it alone.", YELLOW)
+        say(f"  Add this yourself:  \"simulate\": \"{simulate_command(info, journeys.relative_to(root))}\"")
 
     runner = info["runner"] or "no test runner detected, will run it with node"
     say(f"\n{BOLD}Runner:{RESET} {runner}")
@@ -153,8 +172,8 @@ def cmd_run(args):
 
 SWEEP_RUNNER = """
 import {{ readFileSync }} from "node:fs";
-import {{ formatSweep }} from "{home}/harness";
-import {{ sim }} from "{home}/journeys";
+import {{ formatSweep }} from "./{home}/harness";
+import {{ sim }} from "./{home}/journeys";
 
 const groups = JSON.parse(readFileSync({spec!r}, "utf8"));
 const result = await sim.sweep(groups);
@@ -195,6 +214,9 @@ EXAMPLE_SWEEP = {
     "balance": ["how much do i have", "what is my balance", "check account balance"],
     "questionsAboutIt": {
         "inputs": ["what does it cost", "what is my limit"],
+        # A regex source string, not a plain phrase: the harness compiles
+        # this with new RegExp(..., "i"), so anything copied from here works
+        # as written.
         "mustNot": "How much you wan send",
     },
 }
