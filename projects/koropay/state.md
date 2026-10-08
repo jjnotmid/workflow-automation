@@ -1,5 +1,8 @@
 # KoroPay
 
+**Fact check recorded (2026-10-08):** The claim that Maplerad passes down ₦50-₦150 per identity call is unverified; Maplerad Identity pricing is contact-sales only. Public market comparables for basic BVN/NIN lookups are ₦100-₦150 (Ninja, Veripine, NUBAN KYC), and those are lookup products, not biometric checks. Enrollment-before-accounts is true, with the two-step structure (tier 0 create, tier 1 upgrade with BVN/NIN) already modeled in maplerad.mjs. The ₦50-₦150 number must not enter the margin model as fact. Full verdict is in docs/KOROPAY_MASTER_ARCHITECTURE_2026-10-08.md.
+
+
 **Marketing pages updated for the new stack (2026-10-08):** The site now says cards come in naira or dollars (Maplerad issues both), onboarding steps and FAQ mention BVN/NIN verification as the real flow, and the security section gained a fourth pillar: "Identity verified with BVN or NIN". All five languages updated. 181 tests pass, no overflow at any width. Pushed.
 
 
