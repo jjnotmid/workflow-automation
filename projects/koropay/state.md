@@ -1,5 +1,8 @@
 # KoroPay
 
+**Maplerad fully dropped (2026-10-08):** Verified that Safe Haven covers transfers (POST /transfers with mandatory name enquiry first, intra-bank and NIP) and the full bills suite (/vas/pay/airtime confirmed, plus data, cable TV, utility). Maplerad is removed from the stack and provider readiness; its adapter stays as reference only. Final stack: Meta Cloud API, Supabase Edge ingestion plus Postgres, Node worker on Railway/Render, QStash, Safe Haven MFB (banking, savings, payouts, verification, bills), Bridgecard (naira Mastercards), Bitnob (crypto swap), Dojah (KYC fallback), Gemini 2.5 Flash, Intron Sahara. safe-haven.mjs now models name enquiry, transfers, VAS services and purchases. 208 tests pass, pushed.
+
+
 **Provider swap: Safe Haven MFB + Bridgecard (2026-10-08):** Joshua chose Safe Haven MFB for core banking, accounts and high-yield savings, and Bridgecard for naira-only Mastercards. Both verified against public docs and built as adapters (safe-haven.mjs, bridgecard.mjs) with tests; 206 tests pass. Safe Haven is a CBN-licensed MFB with a public API: OAuth2 client credentials, /accounts/v2/subaccount static virtual accounts, real savings interest fields on accounts, transfers, and a ₦50-per-check BVN/NIN OTP verification flow that may replace Dojah. Bridgecard documents Mastercard virtual NGN cards with $1,500 monthly limits and per-card virtual account funding, but one docs line contradicts naira support, so written confirmation is required. Remaining roles: Safe Haven banking/savings/payouts/verification, Bridgecard naira Mastercards, Maplerad bills and transfers, Bitnob crypto, Dojah KYC fallback. Site copy now says naira-only Mastercards in all five languages; no overflow at any width. Pushed.
 
 
