@@ -1,5 +1,8 @@
 # KoroPay
 
+**Marketing pages updated for the new stack (2026-10-08):** The site now says cards come in naira or dollars (Maplerad issues both), onboarding steps and FAQ mention BVN/NIN verification as the real flow, and the security section gained a fourth pillar: "Identity verified with BVN or NIN". All five languages updated. 181 tests pass, no overflow at any width. Pushed.
+
+
 **Final provider layout locked (2026-10-08, commit `a8a8179`):** Cards moved from Bitnob to Maplerad because Bitnob is Visa and USD-only. Maplerad issuing confirmed from the live reference: POST /v1/issuing with currency NGN|USD, type VIRTUAL, auto_approve true, brand MASTERCARD (must be passed explicitly, default is VISA), amount in kobo (NGN) or cents (USD), asynchronous with webhook on the returned reference. The site Mastercard copy is now consistent with reality. Bitnob is stripped to the crypto inflow track (USDT/USDC to Naira swap, endpoint marked unconfirmed until sandbox docs are checked). The intent schema target_asset is now MASTERCARD_NGN | MASTERCARD_USD | SAVINGS in the parser and the worker edge function. Migration 0004_multi_currency_cards.sql adds card_assets and append-only card_events tables for multi-currency card funding reconciliation. 175 tests pass. Full stack for other agents: Meta Cloud API, Supabase Edge Functions ingestion, Node worker on Railway/Render, Upstash QStash, Maplerad for wallets/accounts/payouts/cards, Bitnob crypto swaps, IDVero identity (Maplerad Identity is a comparison option), Gemini 2.5 Flash parser, Intron Sahara voice.
 
 
