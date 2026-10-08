@@ -53,7 +53,8 @@ Stack: Next.js, React, Supabase, plus IT admin / RBAC / DevOps.
   keep suggestions concise and actionable.
 
 ## Decisions made
-- KoroPay customer-facing copy must never mention partners or "after provider approval". Site copy must sound plain and human, never AI or corporate, and no text goes inside pill badges.
+- KoroPay customer-facing copy must never mention partners or "after provider approval", and the marketing site must NEVER show prices or fees of any kind. Approved 2026-10-08. Mock chats may show example transaction amounts (₦5,000) but never charge rows or fee-inclusive totals.
+ Site copy must sound plain and human, never AI or corporate, and no text goes inside pill badges.
  Approved 2026-10-08 after Joshua rejected the gated framing. The footer disclosure reads "KoroPay is a financial technology company, not a bank. Your PIN stays private and never appears in chat."
 - Virtual Mastercard cards are a key KoroPay flagship feature and must stay prominent on the landing and features pages. Joshua states KoroPay offers Mastercard cards; card mocks carry the Mastercard wordmark and a "Powered by Mastercard" pill.
 - On 2026-10-08 Joshua locked KoroPay's production provider stack: Meta WhatsApp Cloud API, Supabase Edge Functions and PostgreSQL, Upstash QStash, Maplerad (banking/accounts/savings), Bitnob (Mastercard/crypto), Intron Sahara v2.5 ASR/TTS, Google Gemini Flash as parser only. This supersedes the earlier Flutterwave direction. The blueprint and review flags are in `Developer/KoroPay/docs/KOROPAY_MASTER_ARCHITECTURE_2026-10-08.md`. CBN BVN/NIN verification is still required; deposit name matching is not a substitute. Pending Joshua: the partner-string copy decision and Maplerad/Bitnob/Upstash credentials.
